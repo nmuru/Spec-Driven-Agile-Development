@@ -34,6 +34,7 @@ def analyze_specification(
     model: str,
     api_key: str,
     run_control: Optional[RunControl] = None,
+    on_phase_complete=None,
 ) -> dict:
     """Turn technical intent into a human-editable, implementation-ready specification."""
     if not intent or not intent.strip():
@@ -76,6 +77,16 @@ def analyze_specification(
             phase_dir.mkdir(parents=True, exist_ok=True)
             (phase_dir / "output.md").write_text(result, encoding="utf-8")
             (phase_dir / "model.txt").write_text(actual_model, encoding="utf-8")
+
+            if on_phase_complete is not None:
+                on_phase_complete({
+                    "phase": phase_key,
+                    "phase_name": phase_name,
+                    "raw_analysis": result,
+                    "raw_path": str(phase_dir / "output.md"),
+                    "run_id": run_id,
+                    "provenance": {"workflow": "specification", "intent": intent.strip()},
+                })
 
         return {
             "run_id": run_id,
