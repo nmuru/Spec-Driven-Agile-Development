@@ -217,12 +217,13 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         model=request.model,
         api_key=request.api_key,
         run_control=control,
+        on_phase_complete=on_phase_complete,
     )
     result = {
         "phase": "specification",
         "phase_name": "Specification",
         "raw_analysis": specification["specification"],
-        "raw_path": str(output_run_dir / "specification-reviewer" / "output.md"),
+        "raw_path": str(output_run_dir / "review" / "output.md"),
         "run_id": specification["run_id"],
         "provenance": {"workflow": "specification", "review": specification["review"]},
     }
