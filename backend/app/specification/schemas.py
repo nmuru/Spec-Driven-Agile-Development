@@ -1,4 +1,4 @@
-"""Schemas for the intent-to-specification workflow."""
+"""Schemas for the phase-based intent-to-specification workflow."""
 
 from pydantic import BaseModel
 
@@ -14,6 +14,11 @@ class SpecificationRequest(BaseModel):
 
 class SpecificationResult(BaseModel):
     run_id: str
-    intent_analysis: str
+    intent: str
+    scope: str
+    business_requirements: str
+    software_requirements: str
+    design: str
+    tasks: str
     specification: str
     review: str
