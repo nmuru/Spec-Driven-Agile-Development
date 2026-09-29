@@ -1,6 +1,6 @@
-# SDLC Dossier
+# Agile to SDLC 
 
-ReverseEngineer-SDLC turns a GitHub repository into a progressive software-engineering dossier across 11 SDLC phases. The frontend submits selected phases to the backend, which clones the repository once, builds deterministic repository intelligence, performs semantic research, then runs the selected phase agents and renders their Markdown output.
+<>
 
 ## Providers and model input
 
