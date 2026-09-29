@@ -3,15 +3,23 @@ from pathlib import Path
 from app.specification import analyzer
 
 
-def test_specification_agents_run_in_order(monkeypatch, tmp_path):
+def test_specification_phases_run_in_order(monkeypatch, tmp_path):
     calls = []
 
     class Intelligence:
         def to_json(self):
             return '{"file_count": 1}'
 
-    monkeypatch.setattr(analyzer, "clone_repository", lambda repo_url, workspace, run_control=None: Path(workspace))
-    monkeypatch.setattr(analyzer, "collect_repository_intelligence", lambda repository: Intelligence())
+    monkeypatch.setattr(
+        analyzer,
+        "clone_repository",
+        lambda repo_url, workspace, run_control=None: Path(workspace),
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "collect_repository_intelligence",
+        lambda repository: Intelligence(),
+    )
 
     def fake_agent(**kwargs):
         calls.append((kwargs["agent"], kwargs["previous_output"]))
@@ -28,13 +36,16 @@ def test_specification_agents_run_in_order(monkeypatch, tmp_path):
         api_key="test-key",
     )
 
-    assert [name for name, _ in calls] == [
-        "intent-analyst",
-        "specification-architect",
-        "specification-reviewer",
-    ]
+    assert [name for name, _ in calls] == [name for name, _ in analyzer.SPECIFICATION_PHASES]
     assert calls[0][1] is None
-    assert calls[1][1] == "output:intent-analyst"
-    assert calls[2][1] == "output:specification-architect"
-    assert result["specification"] == "output:specification-architect"
-    assert result["review"] == "output:specification-reviewer"
+    for index in range(1, len(calls)):
+        assert calls[index][1] == f"output:{calls[index - 1][0]}"
+
+    assert result["intent"] == "Build a new component"
+    assert result["scope"] == "output:scope"
+    assert result["business_requirements"] == "output:business-requirements"
+    assert result["software_requirements"] == "output:software-requirements"
+    assert result["design"] == "output:design"
+    assert result["tasks"] == "output:tasks"
+    assert result["specification"] == "output:review"
+    assert result["review"] == "output:review"
