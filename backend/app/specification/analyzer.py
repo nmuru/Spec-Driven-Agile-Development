@@ -47,7 +47,7 @@ def analyze_specification(
         intelligence = collect_repository_intelligence(repository)
         repository_context = (
             "DETERMINISTIC REPOSITORY CONTEXT\\n\\n"
-            + str(intelligence)
+            + intelligence.to_json()
         )
 
         outputs: dict[str, str] = {}
