@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from .agent_runner import AgentRunnerError
 from .analyzer import analyze_repository
+from .specification.analyzer import analyze_specification
 from .config import settings
 from .memory_guard import MemoryCapacityError, MemoryCapacityGuard, capacity_diagnostics
 from .exporter import create_download_package
@@ -222,6 +223,11 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
 
     if request.mode not in {"parallel", "sequence"}:
         raise HTTPException(status_code=422, detail="mode must be 'parallel' or 'sequence'")
+    if request.objective not in {"specify", "document", "understand"}:
+        raise HTTPException(status_code=422, detail="objective must be 'specify', 'document' or 'understand'")
+    if request.objective == "specify" and not (request.intent or "").strip():
+        raise HTTPException(status_code=422, detail="intent is required when objective is 'specify'")
+    effective_mode = "sequence" if request.objective == "specify" else request.mode
 
     try:
         try:
@@ -235,7 +241,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         output_run_dir = _output_root() / resolved_run_id
         output_run_dir.mkdir(parents=True, exist_ok=True)
         control = RunControl(resolved_run_id, output_run_dir / "run-state.json")
-        control.initialize(repo_url=repo_url, selected_phases=request.selected_phases)
+        control.initialize(repo_url=repo_url, selected_phases=['specification'] if request.objective == 'specify' else request.selected_phases)
         with _run_controls_lock:
             _run_controls[resolved_run_id] = control
     except HTTPException:
