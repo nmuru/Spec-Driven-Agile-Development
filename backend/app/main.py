@@ -209,6 +209,12 @@ def download_analysis(work_id: str) -> FileResponse:
 
 
 def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, control: RunControl, on_phase_complete) -> dict[str, Any]:
+    phase_results: dict[str, Any] = {}
+
+    def handle_phase_complete(result: dict[str, Any]) -> None:
+        phase_results[result["phase"]] = result
+        on_phase_complete(result)
+
     specification = analyze_specification(
         intent=request.intent or "",
         repo_url=str(request.repo_url),
@@ -217,9 +223,11 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         model=request.model,
         api_key=request.api_key,
         run_control=control,
-        on_phase_complete=on_phase_complete,
+        on_phase_complete=handle_phase_complete,
     )
-    result = {
+
+    # Keep the reviewed artifact addressable as the final specification.
+    phase_results["specification"] = {
         "phase": "specification",
         "phase_name": "Specification",
         "raw_analysis": specification["specification"],
@@ -227,8 +235,7 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         "run_id": specification["run_id"],
         "provenance": {"workflow": "specification", "review": specification["review"]},
     }
-    on_phase_complete(result)
-    return {"run_id": specification["run_id"], "results": {"specification": result}, "failures": []}
+    return {"run_id": specification["run_id"], "results": phase_results, "failures": []}
 
 
 @app.post("/api/analyze")
