@@ -1,8 +1,7 @@
-"""Orchestration for the intent-to-build-specification workflow.
+"""Orchestration for the phase-based Specify workflow.
 
-This module is deliberately separate from the legacy SDLC analyzer. Specify is not
-another SDLC documentation phase: it turns human intent into an implementation
-specification through dedicated reasoning roles.
+Intent is a human-authored root artifact. The specification is progressively
+derived through editable communication phases that mirror the SDLC engine pattern.
 """
 
 import tempfile
@@ -16,10 +15,13 @@ from ..repository_intelligence import collect_repository_intelligence
 from ..run_control import RunControl
 
 
-SPECIFICATION_AGENTS = [
-    ("intent-analyst", "Intent Analyst"),
-    ("specification-architect", "Specification Architect"),
-    ("specification-reviewer", "Specification Reviewer"),
+SPECIFICATION_PHASES = [
+    ("scope", "Scope"),
+    ("business-requirements", "Business Requirements"),
+    ("software-requirements", "Software Requirements Specification"),
+    ("design", "Design"),
+    ("tasks", "Implementation Tasks"),
+    ("review", "Specification Review"),
 ]
 
 
@@ -33,7 +35,7 @@ def analyze_specification(
     api_key: str,
     run_control: Optional[RunControl] = None,
 ) -> dict:
-    """Turn user intent into one coherent specification through dedicated agents."""
+    """Turn technical intent into a human-editable, implementation-ready specification."""
     if not intent or not intent.strip():
         raise ValueError("intent cannot be empty")
     if not repo_url or not repo_url.strip():
@@ -41,21 +43,22 @@ def analyze_specification(
 
     run_id = output_run_dir.name or uuid.uuid4().hex
     output_run_dir.mkdir(parents=True, exist_ok=True)
+    (output_run_dir / "intent.md").write_text(intent.strip(), encoding="utf-8")
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
         repository = clone_repository(repo_url, Path(tmp), run_control=run_control)
         intelligence = collect_repository_intelligence(repository)
         repository_context = (
-            "DETERMINISTIC REPOSITORY CONTEXT\\n\\n"
-            + intelligence.to_json()
+            "DETERMINISTIC REPOSITORY CONTEXT\n\n" + intelligence.to_json()
         )
 
         outputs: dict[str, str] = {}
         previous = None
-        for agent_key, agent_name in SPECIFICATION_AGENTS:
+
+        for phase_key, phase_name in SPECIFICATION_PHASES:
             result, actual_model = run_specification_agent(
-                agent=agent_key,
-                agent_name=agent_name,
+                agent=phase_key,
+                agent_name=phase_name,
                 repository=repository,
                 intent=intent.strip(),
                 repository_context=repository_context,
@@ -66,16 +69,22 @@ def analyze_specification(
                 output_run_dir=output_run_dir,
                 run_control=run_control,
             )
-            outputs[agent_key] = result
+            outputs[phase_key] = result
             previous = result
-            agent_dir = output_run_dir / agent_key
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            (agent_dir / "output.md").write_text(result, encoding="utf-8")
-            (agent_dir / "model.txt").write_text(actual_model, encoding="utf-8")
+
+            phase_dir = output_run_dir / phase_key
+            phase_dir.mkdir(parents=True, exist_ok=True)
+            (phase_dir / "output.md").write_text(result, encoding="utf-8")
+            (phase_dir / "model.txt").write_text(actual_model, encoding="utf-8")
 
         return {
             "run_id": run_id,
-            "intent_analysis": outputs["intent-analyst"],
-            "specification": outputs["specification-architect"],
-            "review": outputs["specification-reviewer"],
+            "intent": intent.strip(),
+            "scope": outputs["scope"],
+            "business_requirements": outputs["business-requirements"],
+            "software_requirements": outputs["software-requirements"],
+            "design": outputs["design"],
+            "tasks": outputs["tasks"],
+            "specification": outputs["review"],
+            "review": outputs["review"],
         }
