@@ -10,6 +10,7 @@ class AnalyzeRequest(BaseModel):
     api_key: str
     mode: str = "parallel"
     objective: str = "document"
+    intent: str | None = None
 
 
 class AnalyzeResponse(BaseModel):
