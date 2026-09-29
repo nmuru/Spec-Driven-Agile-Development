@@ -47,7 +47,7 @@ type AnalysisEvent =
   | { type: "analysis_cancelled"; repo_url: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_failed"; repo_url: string; run_id?: string; error: string };
 type RunStatus = { run_id: string; status: string; repo_url: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string> };
-type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "document" | "understand" };
+type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string };
 
 const phases: Phase[] = [
   { id: "business-purpose", label: "Business Purpose", shortLabel: "Purpose" },
@@ -90,11 +90,12 @@ function makeRunId() { return (typeof crypto !== "undefined" && crypto.randomUUI
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
+  const [intent, setIntent] = useState("");
   const [provider, setProvider] = useState("openrouter");
   const [model, setModel] = useState("openrouter/free");
   const [apiKey, setApiKey] = useState("");
   const [mode, setMode] = useState<"parallel" | "sequence">("parallel");
-  const [objective, setObjective] = useState<"document" | "understand">("document");
+  const [objective, setObjective] = useState<"specify" | "document" | "understand">("specify");
   const [showApiKey, setShowApiKey] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisStarted, setAnalysisStarted] = useState(false);
@@ -127,7 +128,7 @@ export default function Home() {
         if (!stored.runId || stored.runId === DEMO_RUN_ID) { window.sessionStorage.removeItem(STORAGE_KEY); setRestored(true); return; }
         const storedCompleted = stored.completedPhases ?? [];
         const storedSelected = (stored.selectedPhases?.length ? stored.selectedPhases : defaultSelectedPhases).filter((phase) => !storedCompleted.includes(phase));
-        setRepoUrl(stored.repoUrl); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "document");
+        setRepoUrl(stored.repoUrl); setIntent(stored.intent ?? ""); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "specify");
         setCompletedPhases(storedCompleted); setActivePhase(stored.activePhase || storedCompleted[storedCompleted.length - 1] || storedSelected[0] || phases[0].id);
         setAnalysisStarted(true); setIsDemo(false); setProvenance(stored.provenance ?? null);
         const response = await fetch(`${API_BASE_URL}/api/analysis/${stored.runId}/status`, { cache: "no-store" });
@@ -161,9 +162,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId) return;
-    const snapshot: StoredWorkspace = { runId, repoUrl, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
+    const snapshot: StoredWorkspace = { runId, repoUrl, intent, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [analysisStarted, isDemo, runId, repoUrl, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
+  }, [analysisStarted, isDemo, runId, repoUrl, intent, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
 
   function applyStatus(status: RunStatus) {
     const backendCompleted = status.completed_phases ?? [];
@@ -197,7 +198,7 @@ export default function Home() {
  /* function viewDemo() {
     if (!analysisResult) return;
     viewedCompletedPhaseRef.current = null;
-    setError(""); setRepoUrl(demoRepoUrl); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
+    setError(""); setRepoUrl(demoRepoUrl); setIntent(""); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
     setCompletedPhases(phases.map((phase) => phase.id)); setActivePhase(phases[0].id); setSelectionView(null); setFailedPhases([]); setProvenance(null);
   }*/
 
@@ -408,7 +409,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("document"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = phases.find((phase) => phase.id === activePhase) ?? phases[0];
@@ -460,7 +461,9 @@ export default function Home() {
 
       <fieldset className="phase-selection" style={{ marginTop: 28 }}><legend>AI model</legend><div style={{ display: "grid", gap: 14 }}><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)} disabled={loading} aria-label="AI provider" style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }}>{providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder={providers.find((item) => item.id === provider)?.placeholder} disabled={loading} required aria-label="AI model" autoComplete="off" style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }} /></label><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>API key</span><div style={{ display: "flex", gap: 8 }}><input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type={showApiKey ? "text" : "password"} placeholder="Enter your API key" disabled={loading} required aria-label="AI provider API key" autoComplete="off" style={{ minWidth: 0, flex: 1, padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }} /><button type="button" onClick={() => setShowApiKey((value) => !value)} disabled={loading}>{showApiKey ? "Hide" : "Show"}</button></div></label><p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>Your API key is used for this analysis request and is not saved by this frontend.</p></div></fieldset>
 
-      <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>What is your objective?</legend><div style={{ display: "grid", gap: 10 }}><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="document" checked={objective === "document"} onChange={() => setObjective("document")} disabled={loading} /><span><strong>Document</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Produce the standard SDLC documentation.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="understand" checked={objective === "understand"} onChange={() => setObjective("understand")} disabled={loading} /><span><strong>Understand</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Explain each completed phase as a clear essay for a developer new to the codebase.</span></span></label></div></fieldset>
+      <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>What is your objective?</legend><div style={{ display: "grid", gap: 10 }}><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="specify" checked={objective === "specify"} onChange={() => setObjective("specify")} disabled={loading} /><span><strong>Specify</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Turn your intent into a lightweight software specification.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="document" checked={objective === "document"} onChange={() => setObjective("document")} disabled={loading} /><span><strong>Document</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Produce the standard SDLC documentation.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="understand" checked={objective === "understand"} onChange={() => setObjective("understand")} disabled={loading} /><span><strong>Understand</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Explain each completed phase as a clear essay for a developer new to the codebase.</span></span></label></div></fieldset>
+
+      {objective === "specify" && <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>Intent</legend><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>What do you want to build or change?</span><textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Describe what you want to build or change, in your own words. Include the outcome you want, expected behavior, constraints, known technology choices, or anything else that matters." disabled={loading} aria-label="Intent" rows={8} style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white", resize: "vertical", font: "inherit", lineHeight: 1.5 }} /></label><p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>Intent is the human-authored starting point for the specification. Backend processing will be added next.</p></fieldset>}
 
       <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>Analysis mode</legend><div style={{ display: "grid", gap: 10 }}><label className="phase-option" style={{ alignItems: "flex-start" }} title="Parallel completes phases faster. Sequential runs phases one after another, allowing later phases to use the results of earlier phases."><input type="radio" name="analysis-mode" value="parallel" checked={mode === "parallel"} onChange={() => setMode("parallel")} disabled={loading} /><span><strong>Parallel</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs phases in parallel.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }} title="Parallel completes phases faster. Sequential runs phases one after another, allowing later phases to use the results of earlier phases."><input type="radio" name="analysis-mode" value="sequence" checked={mode === "sequence"} onChange={() => setMode("sequence")} disabled={loading} /><span><strong>Sequential</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs phases one after another; later phases can use earlier phase results.</span></span></label></div></fieldset>
 
