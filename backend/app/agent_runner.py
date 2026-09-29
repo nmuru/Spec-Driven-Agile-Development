@@ -524,7 +524,7 @@ async def _wait_for_cancellation(run_control: RunControl) -> None:
         await asyncio.sleep(0.2)
 
 
-async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_intelligence: str, model: str, api_key: str, provider: str, previous_output: Optional[str], output_run_dir: Path, run_control: Optional[RunControl] = None) -> tuple[str, str]:
+async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_intelligence: str, model: str, api_key: str, provider: str, previous_output: Optional[str], output_run_dir: Path, run_control: Optional[RunControl] = None, workflow: str = "sdlc") -> tuple[str, str]:
     provider_name = provider.strip().lower()
     if provider_name == "openrouter":
         base_url = "https://openrouter.ai/api/v1"
@@ -542,7 +542,17 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
     if previous_output:
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
-    common_instructions = """You are performing an evidence-driven SDLC reverse-engineering phase.
+    if workflow == "specification":
+        common_instructions = """You are performing an evidence-driven software specification workflow.
+The human-authored intent is the primary source of desired outcomes and constraints. Repository intelligence is supporting technical evidence about the existing system.
+Do not turn the request into an SDLC documentation exercise. Do not invent requirements, silently resolve ambiguity, or allow repository conventions to override explicit intent without making the conflict visible.
+The repository is read-only. Use repository tools only for targeted verification.
+Distinguish explicit intent, evidence-backed decisions, assumptions, and unresolved questions.
+Return only the requested specification workflow artifact in professional Markdown. Do not describe the agent, tools, prompts, or execution process."""
+        task_instruction = "Perform your assigned specification role and produce the requested workflow artifact."
+        agent_label = "Specification"
+    else:
+        common_instructions = """You are performing an evidence-driven SDLC reverse-engineering phase.
 The repository has already been cloned and deterministic repository intelligence has already been collected before your first turn. Treat that intelligence as the primary evidence index.
 Do not repeat repository-wide discovery or reread files merely to reconstruct information already present in the intelligence package. Use repository tools only for a specific ambiguity, missing source passage, or precision check.
 Do not invent details. Distinguish verified facts, reasonable inferences, and unknowns when evidence is incomplete.
@@ -550,14 +560,14 @@ The repository is read-only. Do not modify it.
 Return only complete professional Markdown documentation for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
 Skill resources are supplied explicitly by the runtime. Use those paths and tool identifiers instead of discovering them.
 
-
-
 INVESTIGATION BUDGET
 You have a finite investigation budget defined by the runner. Prioritize high-value evidence gathering early. As the remaining budget becomes small, stop broad exploration and transition to verification and synthesis. On the final available turn, produce the best-supported artifact possible rather than continuing investigation. Never invent missing evidence; mark it unknown or unverified."""
+        task_instruction = "Analyze the repository and produce the requested phase documentation."
+        agent_label = "SDLC"
 
     instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, f"Phase methodology:\n{skill}" if skill else "", phase_intelligence, handoff] if part)
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
-    agent = Agent(name=f"SDLC {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
+    agent = Agent(name=f"{agent_label} {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
@@ -565,7 +575,7 @@ You have a finite investigation budget defined by the runner. Prioritize high-va
     try:
         if run_control and run_control.is_cancelled():
             raise RunCancelled("Analysis stopped by the user.")
-        agent_task = asyncio.create_task(Runner.run(agent, "Analyze the repository and produce the requested phase documentation.", hooks=hooks, max_turns=settings.phase_agent_max_turns))
+        agent_task = asyncio.create_task(Runner.run(agent, task_instruction, hooks=hooks, max_turns=settings.phase_agent_max_turns))
         if run_control is None:
             result = await agent_task
         else:
@@ -643,3 +653,76 @@ def run_phase_agent(phase: str, phase_name: str, repository: Path, phase_intelli
     except Exception as exc:
         logger.exception("OpenAI Agents SDK failed during phase %s", phase)
         raise AgentRunnerError(f"OpenAI Agents SDK failed during phase '{phase}': {exc}") from exc
+
+
+
+def run_specification_agent(
+    *,
+    agent: str,
+    agent_name: str,
+    repository: Path,
+    intent: str,
+    repository_context: str,
+    previous_output: Optional[str] = None,
+    provider: str = "openrouter",
+    model: str = "openrouter/free",
+    api_key: Optional[str] = None,
+    output_run_dir: Optional[Path] = None,
+    run_control: Optional[RunControl] = None,
+) -> tuple[str, str]:
+    """Run one dedicated specification agent using the specification agent/skill namespace."""
+    if not api_key or not api_key.strip():
+        raise AgentRunnerError(f"An API key is required for provider '{provider}'.")
+    if not repository.is_dir():
+        raise AgentRunnerError(f"Repository path does not exist: {repository}")
+    if not intent.strip():
+        raise AgentRunnerError("Specification intent cannot be empty.")
+
+    if output_run_dir is None:
+        run_id = getattr(run_control, "run_id", None) if run_control is not None else None
+        if not run_id and run_control is not None:
+            state_path = getattr(run_control, "state_path", None)
+            if state_path:
+                run_id = Path(state_path).parent.name
+        if not run_id:
+            raise AgentRunnerError("Could not determine the specification run ID.")
+        output_run_dir = PROJECT_ROOT / "output-content" / str(run_id)
+
+    phase = f"specification/{agent}"
+    phase_intelligence = (
+        "HUMAN-AUTHORED INTENT\n\n"
+        + intent.strip()
+        + "\n\n"
+        + repository_context
+    )
+    if previous_output:
+        phase_intelligence += (
+            "\n\nPREVIOUS SPECIFICATION WORKFLOW OUTPUT\n\n"
+            + previous_output[:30000]
+        )
+
+    try:
+        return asyncio.run(
+            _run_agent(
+                phase=phase,
+                phase_name=agent_name,
+                repository=repository,
+                phase_intelligence=phase_intelligence,
+                model=model,
+                api_key=api_key,
+                provider=provider,
+                previous_output=previous_output,
+                output_run_dir=output_run_dir,
+                run_control=run_control,
+                workflow="specification",
+            )
+        )
+    except RunCancelled:
+        raise
+    except AgentRunnerError:
+        raise
+    except Exception as exc:
+        logger.exception("Specification agent failed: %s", agent)
+        raise AgentRunnerError(
+            f"OpenAI Agents SDK failed during specification agent '{agent}': {exc}"
+        ) from exc
