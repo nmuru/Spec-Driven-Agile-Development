@@ -2,14 +2,6 @@
 
 ReverseEngineer-SDLC turns a GitHub repository into a progressive software-engineering dossier across 11 SDLC phases. The frontend submits selected phases to the backend, which clones the repository once, builds deterministic repository intelligence, performs semantic research, then runs the selected phase agents and renders their Markdown output.
 
-## V1 scope
-
-The current version is intentionally a practical first release. It supports public GitHub repositories, explicit phase selection, progressive streaming of completed phases, rerunning selected phases with the same `work_id`, and OpenRouter/OpenAI providers through the OpenAI Agents SDK.
-
-The backend currently accepts a maximum repository size of 500 MB by default. Phase-agent execution is bounded to 15 turns by default. `phases_per_batch` defaults to 1 and parallel batch execution is the default mode. These limits are configuration values and can be changed through the backend settings, but larger repositories or larger execution budgets increase runtime and model usage.
-
-An analysis performs more model work than the number of final dossier phases alone. There is one repository-level semantic research request, one phase-level semantic research request per selected phase, one phase-agent run per selected phase, and a separate rendering request for each completed phase. Actual token consumption and cost depend on repository size, selected phases, model/provider behavior, retries, and provider pricing or free-tier limits.
-
 ## Providers and model input
 
 V1 intentionally exposes only the providers implemented by the backend: OpenRouter and OpenAI. The frontend should not advertise providers that the backend cannot route. The model field is passed through to the selected provider. There is no automatic model fallback in this V1 release. A rate limit, unavailable model, authentication failure, or provider error is surfaced as an analysis failure rather than silently switching to a different model.
