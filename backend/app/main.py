@@ -208,6 +208,28 @@ def download_analysis(work_id: str) -> FileResponse:
     return FileResponse(zip_path, media_type="application/zip", filename="sdlc-documentation.zip")
 
 
+def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, control: RunControl, on_phase_complete) -> dict[str, Any]:
+    specification = analyze_specification(
+        intent=request.intent or "",
+        repo_url=str(request.repo_url),
+        output_run_dir=output_run_dir,
+        provider=request.provider,
+        model=request.model,
+        api_key=request.api_key,
+        run_control=control,
+    )
+    result = {
+        "phase": "specification",
+        "phase_name": "Specification",
+        "raw_analysis": specification["specification"],
+        "raw_path": str(output_run_dir / "specification-reviewer" / "output.md"),
+        "run_id": specification["run_id"],
+        "provenance": {"workflow": "specification", "review": specification["review"]},
+    }
+    on_phase_complete(result)
+    return {"run_id": specification["run_id"], "results": {"specification": result}, "failures": []}
+
+
 @app.post("/api/analyze")
 def analyze(request: AnalyzeRequest) -> StreamingResponse:
     """Run the analysis pipeline and stream completed phases and actionable failures."""
@@ -258,7 +280,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
 
     def run_analysis() -> None:
         try:
-            results = analyze_repository(repo_url, phases_per_batch=settings.phases_per_batch, batch_mode=request.mode, selected_phases=request.selected_phases, work_id=resolved_run_id, on_phase_complete=on_phase_complete, provider=request.provider, model=request.model, api_key=request.api_key, run_control=control, objective=request.objective)
+            results = _run_specification_analysis(request, output_run_dir, control, on_phase_complete) if request.objective == "specify" else analyze_repository(repo_url, phases_per_batch=settings.phases_per_batch, batch_mode=effective_mode, selected_phases=request.selected_phases, work_id=resolved_run_id, on_phase_complete=on_phase_complete, provider=request.provider, model=request.model, api_key=request.api_key, run_control=control, objective=request.objective)
             if control.is_cancelled():
                 if memory_guard.triggered.is_set():
                     control.finish("failed", MemoryCapacityError.user_message)
