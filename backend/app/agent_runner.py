@@ -533,7 +533,7 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
     else:
         raise AgentRunnerError(f"Unsupported provider '{provider}'. Supported providers are: openrouter, openai")
 
-    common_agent_contract = _read_common_agent_contract()
+    common_agent_contract = "" if workflow == "specification" else _read_common_agent_contract()
     agent_definition = _read_agent_definition(phase)
     skill = _read_skill(phase)
     skill_resources = _resolve_skill_resources(phase, output_run_dir)
