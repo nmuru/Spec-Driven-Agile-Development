@@ -44,6 +44,8 @@ class SpecificationStore:
     ) -> None:
         if root is not None:
             self.root = root
+        elif project_folder and product_name is None and isinstance(project_folder, Path):
+            self.root = project_folder
         elif project_folder and product_name:
             self.root = Path(project_folder).expanduser().resolve() / _safe_slug(product_name) / "spec_output"
         else:
@@ -53,7 +55,7 @@ class SpecificationStore:
         (self.root / "repository" / "document").mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def project_id(product_name: str | None, repo_url: str | None = None, intent: str | None = None) -> str:
+    def project_id(repo_url: str | None, intent: str | None = None, product_name: str | None = None) -> str:
         if product_name and product_name.strip():
             return _safe_slug(product_name)
         if repo_url and repo_url.strip():
@@ -100,7 +102,7 @@ class SpecificationStore:
         intent: str,
         product_name: str | None = None,
     ) -> dict:
-        project_id = self.project_id(product_name, repo_url, intent)
+        project_id = self.project_id(repo_url, intent, product_name)
         with _store_lock:
             for number in reversed(self._sprint_numbers(project_id)):
                 sprint_id = f"sprint-{number:03d}"
