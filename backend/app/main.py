@@ -136,7 +136,14 @@ def analysis_status(work_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Analysis not found")
     completed = list(state.get("completed_phases", []))
     results = {phase: content for phase in completed if (content := _read_phase_result(work_id, phase)) is not None}
-    return {**state, "results": results}
+    context_path = _output_root() / work_id / "specification-context.json"
+    specification_context: dict[str, Any] = {}
+    if context_path.is_file():
+        try:
+            specification_context = json.loads(context_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            specification_context = {}
+    return {**state, "results": results, **specification_context}
 
 
 @app.get("/api/specification/{project_id}/{sprint_id}")
