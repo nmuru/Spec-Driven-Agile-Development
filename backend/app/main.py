@@ -295,7 +295,7 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
 @app.post("/api/analyze")
 def analyze(request: AnalyzeRequest) -> StreamingResponse:
     """Run the analysis pipeline and stream completed phases and actionable failures."""
-    repo_url = str(request.repo_url)
+    repo_url = str(request.repo_url) if request.repo_url else ""
     event_queue: Queue[dict[str, Any]] = Queue()
     requested_run_id = request.work_id
 
@@ -311,6 +311,8 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         raise HTTPException(status_code=422, detail="objective must be 'specify', 'document' or 'understand'")
     if request.objective == "specify" and not (request.intent or "").strip():
         raise HTTPException(status_code=422, detail="intent is required when objective is 'specify'")
+    if request.objective in {"document", "understand"} and not request.repo_url:
+        raise HTTPException(status_code=422, detail="repo_url is required for document and understand objectives")
     effective_mode = "sequence" if request.objective == "specify" else request.mode
 
     try:
