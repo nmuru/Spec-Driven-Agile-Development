@@ -636,7 +636,7 @@ Do not turn the request into an SDLC documentation exercise. Do not invent requi
 The repository is read-only. Use repository tools only for targeted verification.
 Durable spec_output is also available through dedicated read-only tools. Previous closed sprint specifications are historical context, not a replacement for the current human-authored intent.
 Distinguish explicit intent, evidence-backed decisions, assumptions, and unresolved questions.
-Return only the requested specification workflow artifact in professional Markdown. Do not describe the agent, tools, prompts, or execution process."""
+Return only the requested specification workflow artifact in concise professional Markdown. These are working specifications consumed by a coding agent, not durable documentation. Include enough technical detail to implement and verify the sprint work, but omit explanatory prose, history, and documentation-style background. Do not describe the agent, tools, prompts, or execution process."""
         task_instruction = "Perform your assigned specification role and produce the requested workflow artifact."
         agent_label = "Specification"
     else:
