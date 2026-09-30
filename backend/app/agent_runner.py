@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 
 from .config import settings
 from .run_control import RunCancelled, RunControl
-from .specification.store import SPECIFICATION_PHASE_FILES, SpecificationStore
+from .specification_store import SPECIFICATION_PHASE_FILES, SpecificationStore
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
