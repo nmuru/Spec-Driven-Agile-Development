@@ -248,6 +248,11 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
                 resources["artifacts"][relative_path] = relative_path
     if output_run_dir.exists():
         resources["artifacts"]["output_content"] = str(output_run_dir.resolve())
+    if settings.spec_output_dir:
+        spec_root = Path(settings.spec_output_dir)
+        spec_root = spec_root if spec_root.is_absolute() else PROJECT_ROOT / spec_root
+        spec_root.mkdir(parents=True, exist_ok=True)
+        resources["artifacts"]["spec_output"] = str(spec_root.resolve())
     return resources
 
 
@@ -264,6 +269,8 @@ def _format_skill_resources(resources: dict[str, Any]) -> str:
         lines.append("artifacts: none")
     if "output_content" in artifacts:
         lines.append(f"output_content: {artifacts['output_content']}")
+    if "spec_output" in artifacts:
+        lines.append(f"spec_output: {artifacts['spec_output']}")
     tools_manifest = resources.get("tools", {})
     if tools_manifest:
         lines.append("tools:")
@@ -276,7 +283,7 @@ def _format_skill_resources(resources: dict[str, Any]) -> str:
         "Use list_resources when you need to discover the complete runtime resource inventory.",
         "Use repository read_file/search/list tools only for the target repository.",
         "Use output-content tools only for workflow artifacts from the current analysis run. Use spec_output tools for durable approved specifications and historical sprint context.",
-        "Do not construct host filesystem paths or use repository tools to access runtime resources.",
+        "Do not construct host filesystem paths or use repository tools to access runtime resources. Use spec_output tools to explore durable approved sprint specifications.",
     ])
     return "\n".join(lines)
 
@@ -597,6 +604,7 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
 The human-authored intent is the primary source of desired outcomes and constraints. Repository intelligence is supporting technical evidence about the existing system.
 Do not turn the request into an SDLC documentation exercise. Do not invent requirements, silently resolve ambiguity, or allow repository conventions to override explicit intent without making the conflict visible.
 The repository is read-only. Use repository tools only for targeted verification.
+Durable spec_output is also available through dedicated read-only tools. Previous closed sprint specifications are historical context, not a replacement for the current human-authored intent.
 Distinguish explicit intent, evidence-backed decisions, assumptions, and unresolved questions.
 Return only the requested specification workflow artifact in professional Markdown. Do not describe the agent, tools, prompts, or execution process."""
         task_instruction = "Perform your assigned specification role and produce the requested workflow artifact."
