@@ -1,4 +1,4 @@
-from app.specification.store import SPECIFICATION_PHASES, SpecificationStore
+from app.specification_store import SPECIFICATION_PHASES, SpecificationStore
 
 
 def test_active_sprint_overwrites_approved_content_and_closes_immutably(tmp_path):
