@@ -48,7 +48,7 @@ def analyze_specification(
     (output_run_dir / "intent.md").write_text(intent.strip(), encoding="utf-8")
 
     # Durable sprint state is separate from the transient run workspace.
-    store = SpecificationStore(project_folder=project_folder, product_name=product_name)
+    store = SpecificationStore(project_folder=project_folder, product_name=product_name) if (project_folder and product_name) else SpecificationStore()
     sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
     project_id = sprint_state["project_id"]
     sprint_id = sprint_state["sprint_id"]
