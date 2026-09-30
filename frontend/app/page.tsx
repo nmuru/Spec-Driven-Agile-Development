@@ -371,7 +371,7 @@ export default function Home() {
 
   async function analyze(event: FormEvent) {
     event.preventDefault();
-    const phasesToRun = selectedPhases.filter((phase) => !completedPhases.includes(phase));
+    const phasesToRun = objective === "specify" ? specificationPhases.map((phase) => phase.id) : selectedPhases.filter((phase) => !completedPhases.includes(phase));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
     if (!repoUrl.trim() || phasesToRun.length === 0) { setError("Enter a repository URL and select at least one new SDLC phase before starting."); return; }
     viewedCompletedPhaseRef.current = null;
