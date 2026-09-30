@@ -1,4 +1,4 @@
-# Agile to SDLC 
+# Spec Driven Agile Development 
 
 <>
 
