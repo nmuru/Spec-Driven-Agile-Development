@@ -316,6 +316,10 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         raise HTTPException(status_code=422, detail="intent is required when objective is 'specify'")
     if request.objective in {"document", "understand"} and not request.repo_url:
         raise HTTPException(status_code=422, detail="repo_url is required for document and understand objectives")
+    if not (request.product_name or "").strip():
+        raise HTTPException(status_code=422, detail="product_name is required")
+    if not (request.project_folder or "").strip():
+        raise HTTPException(status_code=422, detail="project_folder is required")
     effective_mode = "sequence" if request.objective == "specify" else request.mode
 
     try:
@@ -347,7 +351,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
 
     def run_analysis() -> None:
         try:
-            results = _run_specification_analysis(request, output_run_dir, control, on_phase_complete) if request.objective == "specify" else analyze_repository(repo_url, phases_per_batch=settings.phases_per_batch, batch_mode=effective_mode, selected_phases=request.selected_phases, work_id=resolved_run_id, on_phase_complete=on_phase_complete, provider=request.provider, model=request.model, api_key=request.api_key, run_control=control, objective=request.objective)
+            results = _run_specification_analysis(request, output_run_dir, control, on_phase_complete) if request.objective == "specify" else analyze_repository(repo_url, phases_per_batch=settings.phases_per_batch, batch_mode=effective_mode, selected_phases=request.selected_phases, work_id=resolved_run_id, on_phase_complete=on_phase_complete, provider=request.provider, model=request.model, api_key=request.api_key, run_control=control, objective=request.objective, product_name=request.product_name, project_folder=request.project_folder)
             if control.is_cancelled():
                 if memory_guard.triggered.is_set():
                     control.finish("failed", MemoryCapacityError.user_message)
