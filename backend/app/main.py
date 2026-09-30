@@ -20,6 +20,7 @@ from .memory_guard import MemoryCapacityError, MemoryCapacityGuard, capacity_dia
 from .exporter import create_download_package
 from .run_control import RunCancelled, RunControl, load_persisted_run
 from .schemas import AnalyzeRequest
+from .specification.store import SPECIFICATION_PHASE_FILES, SpecificationStore
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ def _read_phase_result(run_id: str, phase: str) -> str | None:
         return None
     path = _output_root() / run_id / phase / "raw.md"
     if not path.is_file():
+        path = _output_root() / run_id / phase / "output.md"
+    if not path.is_file():
         return None
     try:
         content = path.read_text(encoding="utf-8")
@@ -134,6 +137,44 @@ def analysis_status(work_id: str) -> dict[str, Any]:
     completed = list(state.get("completed_phases", []))
     results = {phase: content for phase in completed if (content := _read_phase_result(work_id, phase)) is not None}
     return {**state, "results": results}
+
+
+@app.get("/api/specification/{project_id}/{sprint_id}")
+def get_specification_sprint(project_id: str, sprint_id: str) -> dict[str, Any]:
+    if any(Path(value).name != value for value in (project_id, sprint_id)):
+        raise HTTPException(status_code=404, detail="Specification not found")
+    try:
+        return SpecificationStore().get_sprint(project_id, sprint_id, include_content=True)
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=404, detail="Specification not found") from exc
+
+
+@app.post("/api/specification/{project_id}/{sprint_id}/approve")
+async def approve_specification_phase(project_id: str, sprint_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if any(Path(value).name != value for value in (project_id, sprint_id)):
+        raise HTTPException(status_code=404, detail="Specification not found")
+    phase = str(payload.get("phase", "")).strip()
+    content = str(payload.get("content", ""))
+    try:
+        state = SpecificationStore().approve_phase(project_id, sprint_id, phase, content)
+        return {"status": "approved", "phase": phase, "state": state}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Specification not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/specification/{project_id}/{sprint_id}/close")
+def close_specification_sprint(project_id: str, sprint_id: str) -> dict[str, Any]:
+    if any(Path(value).name != value for value in (project_id, sprint_id)):
+        raise HTTPException(status_code=404, detail="Specification not found")
+    try:
+        state = SpecificationStore().close_sprint(project_id, sprint_id)
+        return {"status": state["status"], "state": state}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Specification not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/analysis/{work_id}/stop")
@@ -233,7 +274,13 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         "raw_analysis": specification["specification"],
         "raw_path": str(output_run_dir / "review" / "output.md"),
         "run_id": specification["run_id"],
-        "provenance": {"workflow": "specification", "review": specification["review"]},
+        "project_id": specification["project_id"],
+        "sprint_id": specification["sprint_id"],
+        "provenance": {
+            "workflow": "specification",
+            "project_id": specification["project_id"],
+            "sprint_id": specification["sprint_id"],
+        },
     }
     return {"run_id": specification["run_id"], "results": phase_results, "failures": []}
 
@@ -284,7 +331,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
     stream_run_id = {"value": resolved_run_id}
 
     def on_phase_complete(phase_result: dict) -> None:
-        event_queue.put({"type": "phase_completed", "phase": phase_result["phase"], "phase_name": phase_result["phase_name"], "raw_analysis": phase_result["raw_analysis"], "raw_path": phase_result["raw_path"], "run_id": phase_result["run_id"], "provenance": phase_result.get("provenance")})
+        event_queue.put({"type": "phase_completed", "phase": phase_result["phase"], "phase_name": phase_result["phase_name"], "raw_analysis": phase_result["raw_analysis"], "raw_path": phase_result["raw_path"], "run_id": phase_result["run_id"], "project_id": phase_result.get("project_id"), "sprint_id": phase_result.get("sprint_id"), "provenance": phase_result.get("provenance")})
 
     def run_analysis() -> None:
         try:
