@@ -48,6 +48,7 @@ def test_specification_phases_run_in_order(monkeypatch, tmp_path):
     assert result["scope"] == "output:scope"
     assert result["business_requirements"] == "output:business-requirements"
     assert result["software_requirements"] == "output:software-requirements"
+    assert result["technology"] == "output:technology"
     assert result["design"] == "output:design"
     assert result["tasks"] == "output:tasks"
     assert result["specification"] == "output:review"
