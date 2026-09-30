@@ -20,7 +20,7 @@ from .memory_guard import MemoryCapacityError, MemoryCapacityGuard, capacity_dia
 from .exporter import create_download_package
 from .run_control import RunCancelled, RunControl, load_persisted_run
 from .schemas import AnalyzeRequest
-from .specification.store import SPECIFICATION_PHASE_FILES, SpecificationStore
+from .specification_store import SPECIFICATION_PHASE_FILES, SpecificationStore
 
 logger = logging.getLogger(__name__)
 
