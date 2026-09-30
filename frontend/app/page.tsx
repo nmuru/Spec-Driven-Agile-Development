@@ -48,7 +48,7 @@ type AnalysisEvent =
   | { type: "analysis_cancelled"; repo_url: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_failed"; repo_url: string; run_id?: string; error: string };
 type RunStatus = { run_id: string; status: string; repo_url: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string>; project_id?: string; sprint_id?: string };
-type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string };
+type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string; productName?: string; projectFolder?: string };
 
 const specificationPhases: SpecPhase[] = [
   { id: "scope", label: "Scope" },
@@ -201,6 +201,8 @@ function SpecifyWorkspace({
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
   const [intent, setIntent] = useState("");
+  const [productName, setProductName] = useState("");
+  const [projectFolder, setProjectFolder] = useState("");
   const [provider, setProvider] = useState("openrouter");
   const [model, setModel] = useState("openrouter/free");
   const [apiKey, setApiKey] = useState("");
@@ -247,7 +249,7 @@ export default function Home() {
         if (!stored.runId || stored.runId === DEMO_RUN_ID) { window.sessionStorage.removeItem(STORAGE_KEY); setRestored(true); return; }
         const storedCompleted = stored.completedPhases ?? [];
         const storedSelected = (stored.selectedPhases?.length ? stored.selectedPhases : defaultSelectedPhases).filter((phase) => !storedCompleted.includes(phase));
-        setRepoUrl(stored.repoUrl); setIntent(stored.intent ?? ""); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "specify");
+        setRepoUrl(stored.repoUrl); setIntent(stored.intent ?? ""); setProductName(stored.productName ?? ""); setProjectFolder(stored.projectFolder ?? ""); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "specify");
         setCompletedPhases(storedCompleted); setActivePhase(stored.activePhase || storedCompleted[storedCompleted.length - 1] || storedSelected[0] || phases[0].id);
         setAnalysisStarted(true); setIsDemo(false); setProvenance(stored.provenance ?? null);
         const response = await fetch(`${API_BASE_URL}/api/analysis/${stored.runId}/status`, { cache: "no-store" });
@@ -268,7 +270,7 @@ export default function Home() {
     let cancelled = false;
     async function loadSpecificationState() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}`, { cache: "no-store" });
+        const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}?project_folder=${encodeURIComponent(projectFolder)}&product_name=${encodeURIComponent(productName)}`, { cache: "no-store" });
         if (!response.ok) return;
         const state = await response.json() as { status: string; approved_phases?: string[]; contents?: Record<string, string> };
         if (cancelled) return;
@@ -304,9 +306,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId) return;
-    const snapshot: StoredWorkspace = { runId, repoUrl, intent, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
+    const snapshot: StoredWorkspace = { runId, repoUrl, intent, productName, projectFolder, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [analysisStarted, isDemo, runId, repoUrl, intent, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
+  }, [analysisStarted, isDemo, runId, repoUrl, intent, productName, projectFolder, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
 
   function applyStatus(status: RunStatus) {
     const backendCompleted = status.completed_phases ?? [];
@@ -375,6 +377,8 @@ export default function Home() {
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
     if (objective !== "specify" && !repoUrl.trim()) { setError("Enter a repository URL before starting."); return; }
     if (objective !== "specify" && phasesToRun.length === 0) { setError("Select at least one new SDLC phase before starting."); return; }
+    if (objective === "specify" && !productName.trim()) { setError("Enter a Product Name before starting."); return; }
+    if (objective === "specify" && !projectFolder.trim()) { setError("Enter the Project Folder location before starting."); return; }
     if (objective === "specify" && !intent.trim()) { setError("Enter the Specify Intent before starting."); return; }
     viewedCompletedPhaseRef.current = null;
     continuationStartingRef.current = Boolean(runId && !isDemo);
@@ -402,6 +406,8 @@ export default function Home() {
           mode,
           objective,
           intent: objective === "specify" ? intent : undefined,
+          product_name: objective === "specify" ? productName.trim() : undefined,
+          project_folder: objective === "specify" ? projectFolder.trim() : undefined,
         }),
       });
 
@@ -582,7 +588,7 @@ export default function Home() {
       const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phase: specActivePhase, content: contentToApprove }),
+        body: JSON.stringify({ phase: specActivePhase, content: contentToApprove, product_name: productName.trim(), project_folder: projectFolder.trim() }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -608,7 +614,7 @@ export default function Home() {
     setSpecSaving(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}/close`, { method: "POST" });
+      const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_name: productName.trim(), project_folder: projectFolder.trim() }) });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data?.detail || "The sprint specification could not be closed.");
@@ -623,7 +629,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecDirty({}); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setProductName(""); setProjectFolder(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecDirty({}); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = phases.find((phase) => phase.id === activePhase) ?? phases[0];
@@ -676,6 +682,8 @@ export default function Home() {
       <fieldset className="phase-selection" style={{ marginTop: 28 }}><legend>AI model</legend><div style={{ display: "grid", gap: 14 }}><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)} disabled={loading} aria-label="AI provider" style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }}>{providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder={providers.find((item) => item.id === provider)?.placeholder} disabled={loading} required aria-label="AI model" autoComplete="off" style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }} /></label><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>API key</span><div style={{ display: "flex", gap: 8 }}><input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type={showApiKey ? "text" : "password"} placeholder="Enter your API key" disabled={loading} required aria-label="AI provider API key" autoComplete="off" style={{ minWidth: 0, flex: 1, padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white" }} /><button type="button" onClick={() => setShowApiKey((value) => !value)} disabled={loading}>{showApiKey ? "Hide" : "Show"}</button></div></label><p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>Your API key is used for this analysis request and is not saved by this frontend.</p></div></fieldset>
 
       <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>What is your objective?</legend><div style={{ display: "grid", gap: 10 }}><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="specify" checked={objective === "specify"} onChange={() => setObjective("specify")} disabled={loading} /><span><strong>Specify</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Turn your intent into a lightweight software specification.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="document" checked={objective === "document"} onChange={() => setObjective("document")} disabled={loading} /><span><strong>Document</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Produce the standard SDLC documentation.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }}><input type="radio" name="objective" value="understand" checked={objective === "understand"} onChange={() => setObjective("understand")} disabled={loading} /><span><strong>Understand</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Explain each completed phase as a clear essay for a developer new to the codebase.</span></span></label></div></fieldset>
+
+      {objective === "specify" && <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>Project</legend><div style={{ display: "grid", gap: 12 }}><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Product Name</span><input value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="e.g. Vercel Commerce" disabled={loading} required aria-label="Product Name" /></label><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>Project Folder</span><input value={projectFolder} onChange={(event) => setProjectFolder(event.target.value)} placeholder="e.g. C:\\Projects" disabled={loading} required aria-label="Project Folder" /><span style={{ color: "var(--muted)", fontSize: 12 }}>The backend will create <code>&lt;Project Folder&gt;/&lt;Product Name&gt;/spec_output</code>. Use a folder accessible to the backend process.</span></label></div></fieldset>}
 
       {objective === "specify" && <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>Intent</legend><label style={{ display: "grid", gap: 7 }}><span style={{ fontSize: 13, fontWeight: 700 }}>What do you want to build or change?</span><textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Describe what you want to build or change, in your own words. Include the outcome you want, expected behavior, constraints, known technology choices, or anything else that matters." disabled={loading} aria-label="Intent" rows={8} style={{ width: "100%", padding: "12px 13px", border: "1px solid #cfd4da", borderRadius: 9, outline: "none", color: "var(--text)", background: "white", resize: "vertical", font: "inherit", lineHeight: 1.5 }} /></label><p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>Intent is the human-authored root artifact. The Specify workflow will progressively turn it into an editable implementation specification.</p></fieldset>}
 
