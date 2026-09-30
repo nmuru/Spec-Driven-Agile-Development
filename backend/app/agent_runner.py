@@ -20,6 +20,7 @@ from openai import AsyncOpenAI
 
 from .config import settings
 from .run_control import RunCancelled, RunControl
+from .specification.store import SPECIFICATION_PHASE_FILES, SpecificationStore
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -237,6 +238,7 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
             "repository": ["list_files","glob","grep", "read_file", "search_repository"],
             "runtime_resources": ["list_resources", "read_resource"],
             "output_content": ["list_previous_phase_outputs", "read_previous_phase_output"],
+            "spec_output": ["list_spec_projects", "list_spec_sprints", "list_specification_phases", "read_spec_output"],
         },
     }
     if skill_dir.is_dir():
@@ -273,7 +275,7 @@ def _format_skill_resources(resources: dict[str, Any]) -> str:
         "Runtime skill resources are relative to the supplied skill resource root; use read_resource with the supplied relative path.",
         "Use list_resources when you need to discover the complete runtime resource inventory.",
         "Use repository read_file/search/list tools only for the target repository.",
-        "Use output-content tools only for workflow artifacts from the current analysis run.",
+        "Use output-content tools only for workflow artifacts from the current analysis run. Use spec_output tools for durable approved specifications and historical sprint context.",
         "Do not construct host filesystem paths or use repository tools to access runtime resources.",
     ])
     return "\n".join(lines)
@@ -282,6 +284,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
     root = repository.resolve()
     output_root = output_run_dir.resolve()
     skill_dir = (SKILLS_SOURCE / phase).resolve()
+    spec_store = SpecificationStore()
 
     def safe_path(relative_path: str) -> Path:
         candidate = (root / relative_path).resolve()
@@ -387,6 +390,49 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
 
 
     @function_tool
+    def list_spec_projects() -> str:
+        """List durable specification projects available to this application."""
+        projects = spec_store.list_projects()
+        return "\\n".join(projects) if projects else "No durable specification projects are available."
+
+    @function_tool
+    def list_spec_sprints(project_id: str) -> str:
+        """List sprint specifications for a durable specification project."""
+        try:
+            sprints = spec_store.list_sprints(project_id)
+        except OSError as exc:
+            return f"Unable to list specification sprints: {exc}"
+        if not sprints:
+            return "No sprint specifications are available."
+        return "\\n".join(
+            f"{item['sprint_id']}: {item['status']} (approved: {', '.join(item.get('approved_phases', [])) or 'none'})"
+            for item in sprints
+        )
+
+    @function_tool
+    def list_specification_phases(project_id: str, sprint_id: str) -> str:
+        """List available approved specification artifacts in a sprint."""
+        try:
+            sprint = spec_store.get_sprint(project_id, sprint_id, include_content=False)
+        except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+            return f"Specification sprint not found: {exc}"
+        phases = ["intent"] + [phase for phase in SPECIFICATION_PHASE_FILES if phase in sprint.get("approved_phases", [])]
+        return "\\n".join(phases) if phases else "No specification artifacts are approved yet."
+
+    @function_tool
+    def read_spec_output(project_id: str, sprint_id: str, phase: str, max_chars: int = 30000) -> str:
+        """Read one durable specification artifact from a project sprint."""
+        if phase != "intent" and phase not in SPECIFICATION_PHASE_FILES:
+            return "Unknown specification phase."
+        try:
+            content = spec_store.read_phase(project_id, sprint_id, phase)
+        except (FileNotFoundError, OSError) as exc:
+            return f"Specification artifact could not be read: {exc}"
+        if content is None:
+            return "Specification artifact does not exist yet."
+        return content[:max_chars]
+
+    @function_tool
     def list_files(path: str = ".", max_entries: int = 300) -> str:
         """List repository files and directories recursively, without modifying anything."""
         target = safe_path(path)
@@ -484,6 +530,10 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         read_resource,
         list_previous_phase_outputs,
         read_previous_phase_output,
+        list_spec_projects,
+        list_spec_sprints,
+        list_specification_phases,
+        read_spec_output,
     ]
 
 
