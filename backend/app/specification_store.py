@@ -1,23 +1,16 @@
-"""Durable storage for approved sprint specifications.
-
-The active analysis workspace remains transient under output-content/. This
-store contains only human-approved specification artifacts and their lifecycle
-state. Approved files are overwritten in place during an active sprint; once
-closed, they are immutable.
-"""
+"""Durable storage for approved sprint specifications."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import json
 import hashlib
+import json
 from pathlib import Path
 import re
 import threading
 from urllib.parse import urlparse
 
 from .config import settings
-
 
 SPECIFICATION_PHASE_FILES = {
     "scope": "scope.md",
@@ -27,7 +20,6 @@ SPECIFICATION_PHASE_FILES = {
     "tasks": "tasks.md",
     "review": "specification.md",
 }
-
 SPECIFICATION_PHASES = tuple(SPECIFICATION_PHASE_FILES)
 _store_lock = threading.RLock()
 
@@ -42,27 +34,38 @@ def _safe_slug(value: str) -> str:
 
 
 class SpecificationStore:
-    def __init__(self, root: Path | None = None) -> None:
-        configured = root or Path(settings.spec_output_dir)
-        self.root = configured if configured.is_absolute() else Path(__file__).resolve().parents[2] / configured
-        self.root.mkdir(parents=True, exist_ok=True)
+    """Store project artifacts under <project-folder>/<product>/spec_output."""
 
-    def project_id(self, repo_url: str | None, intent: str | None = None) -> str:
+    def __init__(
+        self,
+        project_folder: str | Path | None = None,
+        product_name: str | None = None,
+        root: Path | None = None,
+    ) -> None:
+        if root is not None:
+            self.root = root
+        elif project_folder and product_name:
+            self.root = Path(project_folder).expanduser().resolve() / _safe_slug(product_name) / "spec_output"
+        else:
+            configured = Path(settings.spec_output_dir)
+            self.root = configured if configured.is_absolute() else Path(__file__).resolve().parents[2] / configured
+        self.root.mkdir(parents=True, exist_ok=True)
+        (self.root / "repository" / "document").mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def project_id(product_name: str | None, repo_url: str | None = None, intent: str | None = None) -> str:
+        if product_name and product_name.strip():
+            return _safe_slug(product_name)
         if repo_url and repo_url.strip():
             parsed = urlparse(repo_url.strip())
             parts = [part for part in parsed.path.strip("/").split("/") if part]
             if len(parts) >= 2:
-                owner = parts[0]
-                repo = parts[1].removesuffix(".git")
-                return _safe_slug(f"{owner}-{repo}")
-            host = parsed.hostname or "repository"
-            return _safe_slug(host)
-
+                return _safe_slug(f"{parts[0]}-{parts[1].removesuffix('.git')}")
         digest = hashlib.sha256((intent or "").strip().encode("utf-8")).hexdigest()[:12]
         return f"intent-{digest}"
 
     def project_dir(self, project_id: str) -> Path:
-        return self.root / _safe_slug(project_id)
+        return self.root
 
     def _sprint_dir(self, project_id: str, sprint_id: str) -> Path:
         return self.root / _safe_slug(sprint_id)
@@ -84,23 +87,21 @@ class SpecificationStore:
         temp.replace(path)
 
     def _sprint_numbers(self, project_id: str) -> list[int]:
-        project = self.project_dir(project_id)
-        if not project.is_dir():
-            return []
         numbers: list[int] = []
-        for path in project.iterdir():
+        for path in self.root.iterdir():
             match = re.fullmatch(r"sprint-(\d+)", path.name)
             if match and path.is_dir():
                 numbers.append(int(match.group(1)))
         return sorted(numbers)
 
-    def get_or_create_active_sprint(self, repo_url: str | None, intent: str, product_name: str | None = None) -> dict:
+    def get_or_create_active_sprint(
+        self,
+        repo_url: str | None,
+        intent: str,
+        product_name: str | None = None,
+    ) -> dict:
         project_id = self.project_id(product_name, repo_url, intent)
         with _store_lock:
-            project = self.project_dir(project_id)
-            project.mkdir(parents=True, exist_ok=True)
-            (project / "document").mkdir(parents=True, exist_ok=True)
-
             for number in reversed(self._sprint_numbers(project_id)):
                 sprint_id = f"sprint-{number:03d}"
                 try:
@@ -125,7 +126,8 @@ class SpecificationStore:
             state = {
                 "project_id": project_id,
                 "sprint_id": sprint_id,
-                "product_name": product_name or project_id,\n                "repo_url": repo_url,
+                "product_name": product_name or project_id,
+                "repo_url": repo_url,
                 "status": "active",
                 "created_at": _utc_now(),
                 "closed_at": None,
@@ -141,18 +143,14 @@ class SpecificationStore:
             raise ValueError(f"Unknown specification phase: {phase}")
         if not content.strip():
             raise ValueError("Approved specification content cannot be empty.")
-
         with _store_lock:
             state = self._read_state(project_id, sprint_id)
             if state.get("status") != "active":
                 raise ValueError("This sprint specification is closed and immutable.")
-
-            sprint_dir = self._sprint_dir(project_id, sprint_id)
-            target = sprint_dir / SPECIFICATION_PHASE_FILES[phase]
+            target = self._sprint_dir(project_id, sprint_id) / SPECIFICATION_PHASE_FILES[phase]
             temp = target.with_suffix(".tmp")
             temp.write_text(content.strip() + "\n", encoding="utf-8")
             temp.replace(target)
-
             approved = list(state.get("approved_phases", []))
             if phase not in approved:
                 approved.append(phase)
@@ -178,10 +176,10 @@ class SpecificationStore:
             return result
 
     def list_projects(self) -> list[str]:
-        return sorted(path.name for path in self.root.iterdir() if path.is_dir())
+        return [self.root.parent.name]
 
     def list_sprints(self, project_id: str) -> list[dict]:
-        result = []
+        result: list[dict] = []
         for number in self._sprint_numbers(project_id):
             sprint_id = f"sprint-{number:03d}"
             try:
@@ -195,11 +193,15 @@ class SpecificationStore:
             state = self._read_state(project_id, sprint_id)
             if state.get("status") != "active":
                 return state
-
-            missing = [phase for phase in SPECIFICATION_PHASES if phase not in state.get("approved_phases", [])]
+            missing = [
+                phase for phase in SPECIFICATION_PHASES
+                if phase not in state.get("approved_phases", [])
+            ]
             if missing:
-                raise ValueError("All specification phases must be approved before closing the sprint: " + ", ".join(missing))
-
+                raise ValueError(
+                    "All specification phases must be approved before closing the sprint: "
+                    + ", ".join(missing)
+                )
             state["status"] = "closed"
             state["closed_at"] = _utc_now()
             state["specification_version"] = 1
@@ -207,10 +209,7 @@ class SpecificationStore:
             return state
 
     def read_phase(self, project_id: str, sprint_id: str, phase: str) -> str | None:
-        if phase == "intent":
-            filename = "intent.md"
-        else:
-            filename = SPECIFICATION_PHASE_FILES.get(phase)
+        filename = "intent.md" if phase == "intent" else SPECIFICATION_PHASE_FILES.get(phase)
         if not filename:
             return None
         path = self._sprint_dir(project_id, sprint_id) / filename
