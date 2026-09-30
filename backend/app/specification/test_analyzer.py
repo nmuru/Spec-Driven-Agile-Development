@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.specification import analyzer
+from app.specification.store import SpecificationStore
 
 
 def test_specification_phases_run_in_order(monkeypatch, tmp_path):
@@ -9,6 +10,8 @@ def test_specification_phases_run_in_order(monkeypatch, tmp_path):
     class Intelligence:
         def to_json(self):
             return '{"file_count": 1}'
+
+    monkeypatch.setattr(analyzer, "SpecificationStore", lambda: SpecificationStore(tmp_path / "spec_output"))
 
     monkeypatch.setattr(
         analyzer,
@@ -49,3 +52,5 @@ def test_specification_phases_run_in_order(monkeypatch, tmp_path):
     assert result["tasks"] == "output:tasks"
     assert result["specification"] == "output:review"
     assert result["review"] == "output:review"
+    assert result["project_id"] == "example-project"
+    assert result["sprint_id"] == "sprint-001"
