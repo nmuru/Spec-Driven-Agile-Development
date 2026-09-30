@@ -266,7 +266,7 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
 
     specification = analyze_specification(
         intent=request.intent or "",
-        repo_url=str(request.repo_url),
+        repo_url=str(request.repo_url) if request.repo_url else None,
         output_run_dir=output_run_dir,
         provider=request.provider,
         model=request.model,
