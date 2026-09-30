@@ -51,10 +51,6 @@ def _run_single_phase(phase_key: str, phase_name: str, repository: Path, phase_i
         document = f"---\nmodel: {actual_model}\n---\n\n{rendered_result}\n"
         raw_path = phase_output_dir / "raw.md"
         raw_path.write_text(document, encoding="utf-8")
-        if objective == "document" and product_name and project_folder:
-            persistent_dir = SpecificationStore(project_folder=project_folder, product_name=product_name).root / "repository" / "document"
-            persistent_dir.mkdir(parents=True, exist_ok=True)
-            (persistent_dir / f"{phase_key}.md").write_text(document, encoding="utf-8")
         provenance = {"model": actual_model}
         (phase_output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
         if run_control: run_control.phase_completed(phase_key)
@@ -80,20 +76,24 @@ def _phase_failure(phase_key: str, phase_name: str, exc: Exception) -> dict:
     return {"phase": phase_key, "phase_name": phase_name, "error_type": type(exc).__name__, "error": error}
 
 
-def _run_batch(batch: list[tuple[str, str]], repository: Path, phase_packages: dict[str, str], output_run_dir: Path, run_id: str, on_phase_complete: Optional[PhaseCompleteCallback] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: str = "", diagnostics: Optional[ResourceDiagnostics] = None, batch_index: Optional[int] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> tuple[dict, list[dict]]:
+def _run_batch(batch: list[tuple[str, str]], repository: Path, phase_packages: dict[str, str], output_run_dir: Path, run_id: str, on_phase_complete: Optional[PhaseCompleteCallback] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: str = "", diagnostics: Optional[ResourceDiagnostics] = None, batch_index: Optional[int] = None, run_control: Optional[RunControl] = None, objective: str = "document", product_name: str | None = None, project_folder: str | None = None) -> tuple[dict, list[dict]]:
     batch_results: dict[str, dict] = {}
     batch_failures: list[dict] = []
     phase_by_future = {}
     with ThreadPoolExecutor(max_workers=len(batch)) as executor:
         for key, name in batch:
             _check_cancelled(run_control)
-            future = executor.submit(_run_single_phase, key, name, repository, phase_packages[key], output_run_dir, run_id, provider, model, api_key, diagnostics, batch_index, run_control, objective)
+            future = executor.submit(_run_single_phase, key, name, repository, phase_packages[key], output_run_dir, run_id, provider, model, api_key, diagnostics, batch_index, run_control, objective, product_name, project_folder)
             phase_by_future[future] = (key, name)
         for future in as_completed(phase_by_future):
             key, name = phase_by_future[future]
             try:
                 result = future.result()
                 batch_results[result["phase"]] = result
+                if objective == "document" and product_name and project_folder:
+                    persistent_dir = SpecificationStore(project_folder=project_folder, product_name=product_name).root / "repository" / "document"
+                    persistent_dir.mkdir(parents=True, exist_ok=True)
+                    (persistent_dir / f"{result['phase']}.md").write_text(result["raw_analysis"], encoding="utf-8")
                 if on_phase_complete and not (run_control and run_control.is_cancelled()): on_phase_complete(result)
             except RunCancelled:
                 raise
@@ -205,12 +205,12 @@ def analyze_repository(repo_url: str, phases_per_batch: int = settings.phases_pe
                 if runnable_batches:
                     _check_cancelled(run_control)
                     with ThreadPoolExecutor(max_workers=len(runnable_batches)) as executor:
-                        futures = {executor.submit(_run_batch, batch, repository, phase_packages, output_run_dir, run_id, on_phase_complete, provider, model, api_key, diagnostics, index, run_control, objective): index for index, batch in enumerate(runnable_batches, start=1)}
+                        futures = {executor.submit(_run_batch, batch, repository, phase_packages, output_run_dir, run_id, on_phase_complete, provider, model, api_key, diagnostics, index, run_control, objective, product_name, project_folder): index for index, batch in enumerate(runnable_batches, start=1)}
                         for future in as_completed(futures):
                             _check_cancelled(run_control); batch_results, batch_failures = future.result(); results.update(batch_results); failures.extend(batch_failures)
             else:
                 for index, batch in enumerate(runnable_batches, start=1):
-                    _check_cancelled(run_control); batch_results, batch_failures = _run_batch(batch, repository, phase_packages, output_run_dir, run_id, on_phase_complete, provider, model, api_key, diagnostics, index, run_control, objective); results.update(batch_results); failures.extend(batch_failures)
+                    _check_cancelled(run_control); batch_results, batch_failures = _run_batch(batch, repository, phase_packages, output_run_dir, run_id, on_phase_complete, provider, model, api_key, diagnostics, index, run_control, objective, product_name, project_folder); results.update(batch_results); failures.extend(batch_failures)
         _check_cancelled(run_control)
         if failures:
             diagnostics.run_event("analysis_failed", completed_phases=list(results), failed_phases=[failure["phase"] for failure in failures])
