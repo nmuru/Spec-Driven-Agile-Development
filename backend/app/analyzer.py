@@ -51,6 +51,10 @@ def _run_single_phase(phase_key: str, phase_name: str, repository: Path, phase_i
         document = f"---\nmodel: {actual_model}\n---\n\n{rendered_result}\n"
         raw_path = phase_output_dir / "raw.md"
         raw_path.write_text(document, encoding="utf-8")
+        if objective == "document" and product_name and project_folder:
+            persistent_dir = SpecificationStore(project_folder=project_folder, product_name=product_name).root / "repository" / "document"
+            persistent_dir.mkdir(parents=True, exist_ok=True)
+            (persistent_dir / f"{phase_key}.md").write_text(document, encoding="utf-8")
         provenance = {"model": actual_model}
         (phase_output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
         if run_control: run_control.phase_completed(phase_key)
@@ -104,7 +108,7 @@ def _phase_context(phase: str, deterministic: str, repository_research: str, pha
     return "\n\n".join([deterministic, "UPSTREAM SEMANTIC RESEARCH BRIEF (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use this brief to prioritize investigation and formulate hypotheses. Do not treat it as verified. Material claims must be checked against repository source before entering final documentation.", repository_research, f"PHASE-SPECIFIC SEMANTIC RESEARCH BRIEF FOR {phase} (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use the prioritized files, symbols, and searches below to perform targeted source verification. Do not skip material repository inspection merely because a hypothesis is stated here.", phase_research])
 
 
-def analyze_repository(repo_url: str, phases_per_batch: int = settings.phases_per_batch, number_of_batches: Optional[int] = None, batch_mode: str = "parallel", on_phase_complete: Optional[PhaseCompleteCallback] = None, selected_phases: Optional[list[str]] = None, work_id: Optional[str] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: Optional[str] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> dict:
+def analyze_repository(repo_url: str, phases_per_batch: int = settings.phases_per_batch, number_of_batches: Optional[int] = None, batch_mode: str = "parallel", on_phase_complete: Optional[PhaseCompleteCallback] = None, selected_phases: Optional[list[str]] = None, work_id: Optional[str] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: Optional[str] = None, run_control: Optional[RunControl] = None, objective: str = "document", product_name: str | None = None, project_folder: str | None = None) -> dict:
     if not repo_url or not repo_url.strip(): raise ValueError("repo_url cannot be empty")
     provider = (provider or "").strip().lower()
     if provider not in {"openrouter", "openai"}: raise ValueError("This backend currently supports OpenRouter and OpenAI through the OpenAI Agents SDK")
