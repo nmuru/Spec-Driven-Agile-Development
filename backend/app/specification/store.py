@@ -94,6 +94,7 @@ class SpecificationStore:
         with _store_lock:
             project = self.project_dir(project_id)
             project.mkdir(parents=True, exist_ok=True)
+            (project / "document").mkdir(parents=True, exist_ok=True)
 
             for number in reversed(self._sprint_numbers(project_id)):
                 sprint_id = f"sprint-{number:03d}"
