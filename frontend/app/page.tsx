@@ -108,6 +108,7 @@ function SpecifyWorkspace({
   specResults,
   specDrafts,
   specApproved,
+  specDirty,
   activePhase,
   setActivePhase,
   setDraft,
@@ -127,6 +128,7 @@ function SpecifyWorkspace({
   specResults: Record<string, string>;
   specDrafts: Record<string, string>;
   specApproved: string[];
+  specDirty: Record<string, boolean>;
   activePhase: string;
   setActivePhase: (phase: string) => void;
   setDraft: (phase: string, value: string) => void;
@@ -140,7 +142,7 @@ function SpecifyWorkspace({
   const active = specPhases.find((phase) => phase.id === activePhase) ?? specPhases[0];
   const content = specDrafts[active.id] ?? specResults[active.id] ?? "";
   const completedCount = specPhases.filter((phase) => Boolean(specResults[phase.id])).length;
-  const allApproved = specApproved.length === specPhases.length;
+  const allApproved = specApproved.length === specPhases.length && specPhases.every((phase) => !specDirty[phase.id]);
 
   return <div className="spec-workspace">
     <aside className="spec-sidebar">
@@ -214,6 +216,7 @@ export default function Home() {
   const [specResults, setSpecResults] = useState<Record<string, string>>({});
   const [specDrafts, setSpecDrafts] = useState<Record<string, string>>({});
   const [specApproved, setSpecApproved] = useState<string[]>([]);
+  const [specDirty, setSpecDirty] = useState<Record<string, boolean>>({});
   const [specProjectId, setSpecProjectId] = useState<string | null>(null);
   const [specSprintId, setSpecSprintId] = useState<string | null>(null);
   const [specClosed, setSpecClosed] = useState(false);
@@ -259,6 +262,29 @@ export default function Home() {
     restoreWorkspace();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (objective !== "specify" || !specProjectId || !specSprintId || !analysisStarted) return;
+    let cancelled = false;
+    async function loadSpecificationState() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const state = await response.json() as { status: string; approved_phases?: string[]; contents?: Record<string, string> };
+        if (cancelled) return;
+        const contents = state.contents ?? {};
+        setSpecResults((previous) => ({ ...previous, ...contents }));
+        setSpecDrafts((previous) => ({ ...previous, ...contents }));
+        setSpecApproved(state.approved_phases ?? []);
+        setSpecDirty({});
+        setSpecClosed(state.status === "closed");
+      } catch {
+        // The streaming run remains the primary source while the backend is working.
+      }
+    }
+    loadSpecificationState();
+    return () => { cancelled = true; };
+  }, [objective, specProjectId, specSprintId, analysisStarted]);
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId || !restored || analysisComplete || stopped) return;
@@ -561,6 +587,7 @@ export default function Home() {
         throw new Error(data?.detail || "The specification could not be approved.");
       }
       setSpecResults((previous) => ({ ...previous, [specActivePhase]: contentToApprove }));
+      setSpecDirty((previous) => ({ ...previous, [specActivePhase]: false }));
       setSpecApproved((previous) => previous.includes(specActivePhase) ? previous : [...previous, specActivePhase]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to approve the specification.");
@@ -571,8 +598,8 @@ export default function Home() {
 
   async function closeSpecification() {
     if (!specProjectId || !specSprintId || specClosed) return;
-    if (specApproved.length !== specificationPhases.length) {
-      setError("Approve all six specification phases before closing the sprint specification.");
+    if (specApproved.length !== specificationPhases.length || specificationPhases.some((phase) => specDirty[phase.id])) {
+      setError("Approve every phase, and re-approve any phase changed after its last approval, before closing the sprint specification.");
       return;
     }
     if (!window.confirm("Close this Sprint Specification? The approved specification will become immutable and will be the coding baseline.")) return;
@@ -594,7 +621,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecDirty({}); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = phases.find((phase) => phase.id === activePhase) ?? phases[0];
@@ -657,7 +684,7 @@ export default function Home() {
       {objective !== "specify" && (        <fieldset className="phase-selection"><legend>Select SDLC phases</legend><div className="phase-selection-grid">{phases.map((phase) => <label key={phase.id} className="phase-option"><input type="checkbox" checked={selectedPhases.includes(phase.id)} onChange={() => setSelectedPhases((previous) => previous.includes(phase.id) ? previous.filter((id) => id !== phase.id) : [...previous, phase.id])} disabled={loading} /><span>{phase.label}</span></label>)}</div></fieldset>
       )}
       {error && <div className="error-banner" role="alert">{error}</div>}<div className="landing-note">Analysis is performed by the backend coding-agent pipeline.</div>
-    </div></main> : objective === "specify" ? <SpecifyWorkspace repoUrl={repoUrl} loading={loading} stopping={stopping} analysisComplete={analysisComplete} error={error} specPhases={specificationPhases} specResults={specResults} specDrafts={specDrafts} specApproved={specApproved} activePhase={specActivePhase} setActivePhase={setSpecActivePhase} setDraft={(phase, value) => setSpecDrafts((previous) => ({ ...previous, [phase]: value }))} onApprove={approveSpecificationPhase} onClose={closeSpecification} saving={specSaving} closed={specClosed} onStop={stopAnalysis} runId={runId} /> : <div className="workspace">
+    </div></main> : objective === "specify" ? <SpecifyWorkspace repoUrl={repoUrl} loading={loading} stopping={stopping} analysisComplete={analysisComplete} error={error} specPhases={specificationPhases} specResults={specResults} specDrafts={specDrafts} specApproved={specApproved} specDirty={specDirty} activePhase={specActivePhase} setActivePhase={setSpecActivePhase} setDraft={(phase, value) => { setSpecDrafts((previous) => ({ ...previous, [phase]: value })); setSpecDirty((previous) => ({ ...previous, [phase]: true })); }} onApprove={approveSpecificationPhase} onClose={closeSpecification} saving={specSaving} closed={specClosed} onStop={stopAnalysis} runId={runId} /> : <div className="workspace">
       <aside className="sidebar"><div className="sidebar-heading">SDLC Dossier</div><div className="progress-label">{loading ? progressText : analysisComplete ? "Analysis complete" : stopped ? `${completedPhases.length} of ${denominator} phases completed before stop` : error ? "Analysis failed" : "Analysis"}</div><nav className="phase-nav" aria-label="SDLC phases"><button className={`phase-tab selection-tab ${selectionView === "setup" ? "active" : ""}`} onClick={() => { viewedCompletedPhaseRef.current = null; setSelectionView("setup"); }}><span className="phase-number">00</span><span className="phase-name">Select Phases</span><span className="phase-status">•</span></button>{phases.map((phase, index) => { const complete = completedPhases.includes(phase.id); return <button key={phase.id} className={`phase-tab ${activePhase === phase.id ? "active" : ""} ${!complete ? "locked" : ""}`} onClick={() => { if (complete) { viewedCompletedPhaseRef.current = phase.id; setSelectionView(null); setActivePhase(phase.id); } }} disabled={!complete}><span className="phase-number">{String(index + 1).padStart(2, "0")}</span><span className="phase-name">{phase.label}</span><span className={`phase-status ${complete ? "done" : ""}`}>{complete ? "✓" : "•"}</span></button>; })}</nav><ReviewCodeBaseControl repoUrl={repoUrl} provider={provider} model={model} apiKey={apiKey} runId={runId} completedPhases={completedPhases} />{runId && !isDemo && completedPhases.length > 0 && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="sdlc-documentation.zip">Download completed work</a>}<button className="new-analysis" onClick={resetAnalysis} disabled={loading || stopping}>+ New repository</button></aside>
       <main className="content">
         {selectionView === "setup" ? <section className="selection-panel"><div className="eyebrow">ANALYSIS SETUP</div><h1>Continue analysis</h1><p className="section-intro">Select additional SDLC phases to run in this repository workspace. Completed phases remain readable here and are not rerunnable in V1. To rerun a completed phase, open a new browser tab/workspace.</p><fieldset className="phase-selection"><legend>Run phases</legend><div className="phase-selection-grid">{phases.map((phase) => { const complete = completedPhases.includes(phase.id); return <label key={phase.id} className="phase-option"><input type="checkbox" checked={!complete && selectedPhases.includes(phase.id)} onChange={() => setSelectedPhases((previous) => previous.includes(phase.id) ? previous.filter((id) => id !== phase.id) : [...previous, phase.id])} disabled={loading || stopping || complete} /><span>{phase.label}{complete ? " (completed)" : ""}</span></label>; })}</div></fieldset><form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="https://github.com/owner/repository" type="url" required aria-label="GitHub repository URL" disabled={true} readOnly /><button type="submit" disabled={loading || stopping}>{loading ? "Running..." : "Run selected phases"}</button></form>{error && <div className="error-banner" role="alert">{error}</div>}</section>
