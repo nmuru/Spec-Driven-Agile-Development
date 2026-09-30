@@ -51,8 +51,27 @@ class SpecificationStore:
         else:
             configured = Path(settings.spec_output_dir)
             self.root = configured if configured.is_absolute() else Path(__file__).resolve().parents[2] / configured
+        if project_folder and product_name:
+            project_dir = Path(project_folder).expanduser().resolve() / _safe_slug(product_name)
+            if not project_dir.is_dir():
+                raise ValueError(f"Product directory does not exist: {project_dir}")
+            project_md = project_dir / "project.md"
+            if not project_md.is_file():
+                raise ValueError(f"Required project.md was not found: {project_md}")
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "repository" / "document").mkdir(parents=True, exist_ok=True)
+
+    def project_directory(self) -> Path:
+        return self.root.parent
+
+    def project_document(self) -> Path:
+        return self.project_directory() / "project.md"
+
+    def read_project_document(self, max_chars: int = 60000) -> str:
+        path = self.project_document()
+        if not path.is_file():
+            raise ValueError(f"Required project.md was not found: {path}")
+        return path.read_text(encoding="utf-8", errors="replace")[:max_chars]
 
     @staticmethod
     def project_id(repo_url: str | None, intent: str | None = None, product_name: str | None = None) -> str:
