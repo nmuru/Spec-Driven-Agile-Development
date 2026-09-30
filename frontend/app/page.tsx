@@ -287,7 +287,7 @@ export default function Home() {
     }
     loadSpecificationState();
     return () => { cancelled = true; };
-  }, [objective, specProjectId, specSprintId, analysisStarted]);
+  }, [objective, specProjectId, specSprintId, analysisStarted, projectFolder, productName]);
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId || !restored || analysisComplete || stopped) return;
