@@ -34,6 +34,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
 }
 
 type Phase = { id: string; label: string; shortLabel: string };
+type SpecPhase = { id: string; label: string };
 type AnalysisResult = {
   repo_url: string; business_purpose: string; scope: string; business_requirements: string; features: string;
   software_requirements: string; technology_architecture: string; design_pattern: string;
@@ -42,12 +43,21 @@ type AnalysisResult = {
 };
 type Failure = { phase: string; phase_name: string; error_type: string; error: string };
 type AnalysisEvent =
-  | { type: "phase_completed"; phase: string; phase_name: string; raw_analysis: string; raw_path: string; run_id: string; provenance?: { model: string } }
+  | { type: "phase_completed"; phase: string; phase_name: string; raw_analysis: string; raw_path: string; run_id: string; project_id?: string; sprint_id?: string; provenance?: { model?: string; workflow?: string; project_id?: string; sprint_id?: string } }
   | { type: "analysis_completed"; repo_url: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_cancelled"; repo_url: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_failed"; repo_url: string; run_id?: string; error: string };
-type RunStatus = { run_id: string; status: string; repo_url: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string> };
+type RunStatus = { run_id: string; status: string; repo_url: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string>; project_id?: string; sprint_id?: string };
 type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string };
+
+const specificationPhases: SpecPhase[] = [
+  { id: "scope", label: "Scope" },
+  { id: "business-requirements", label: "Business Requirements" },
+  { id: "software-requirements", label: "Software Requirements Specification" },
+  { id: "design", label: "Design" },
+  { id: "tasks", label: "Implementation Tasks" },
+  { id: "review", label: "Specification Review" },
+];
 
 const phases: Phase[] = [
   { id: "business-purpose", label: "Business Purpose", shortLabel: "Purpose" },
@@ -88,6 +98,104 @@ function emptyResult(repoUrl = ""): AnalysisResult {
 }
 function makeRunId() { return (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9]/g, ""); }
 
+function SpecifyWorkspace({
+  repoUrl,
+  loading,
+  stopping,
+  analysisComplete,
+  error,
+  specPhases,
+  specResults,
+  specDrafts,
+  specApproved,
+  activePhase,
+  setActivePhase,
+  setDraft,
+  onApprove,
+  onClose,
+  saving,
+  closed,
+  onStop,
+  runId,
+}: {
+  repoUrl: string;
+  loading: boolean;
+  stopping: boolean;
+  analysisComplete: boolean;
+  error: string;
+  specPhases: SpecPhase[];
+  specResults: Record<string, string>;
+  specDrafts: Record<string, string>;
+  specApproved: string[];
+  activePhase: string;
+  setActivePhase: (phase: string) => void;
+  setDraft: (phase: string, value: string) => void;
+  onApprove: () => void;
+  onClose: () => void;
+  saving: boolean;
+  closed: boolean;
+  onStop: () => void;
+  runId: string | null;
+}) {
+  const active = specPhases.find((phase) => phase.id === activePhase) ?? specPhases[0];
+  const content = specDrafts[active.id] ?? specResults[active.id] ?? "";
+  const completedCount = specPhases.filter((phase) => Boolean(specResults[phase.id])).length;
+  const allApproved = specApproved.length === specPhases.length;
+
+  return <div className="spec-workspace">
+    <aside className="spec-sidebar">
+      <div className="sidebar-heading">Sprint Specification</div>
+      <div className="progress-label">
+        {closed ? "Closed — immutable coding baseline" : loading ? `${completedCount} of ${specPhases.length} phases generated` : analysisComplete ? "All specification phases generated" : "Specification"}
+      </div>
+      <nav className="phase-nav" aria-label="Specification phases">
+        {specPhases.map((phase, index) => {
+          const generated = Boolean(specResults[phase.id]);
+          const approved = specApproved.includes(phase.id);
+          return <button key={phase.id} className={`phase-tab ${activePhase === phase.id ? "active" : ""} ${!generated ? "locked" : ""}`} onClick={() => generated && setActivePhase(phase.id)} disabled={!generated}>
+            <span className="phase-number">{String(index + 1).padStart(2, "0")}</span>
+            <span className="phase-name">{phase.label}</span>
+            <span className={`phase-status ${approved ? "done" : ""}`}>{approved ? "✓" : generated ? "•" : "○"}</span>
+          </button>;
+        })}
+      </nav>
+      {!closed && loading && <button type="button" className="spec-stop-button" onClick={onStop} disabled={stopping}>{stopping ? "Stopping..." : "Stop analysis"}</button>}
+      {error && <div className="error-banner" role="alert">{error}</div>}
+    </aside>
+
+    <main className="content spec-content">
+      <section className={`spec-status-banner ${closed ? "closed" : allApproved ? "ready" : ""}`}>
+        <div>
+          <div className="eyebrow">{closed ? "SPRINT SPECIFICATION CLOSED" : "SPECIFY"}</div>
+          <h1>{closed ? "Sprint specification is now immutable." : "Build the specification through progressive review."}</h1>
+          <p>{closed ? "This approved specification is the baseline for implementation. It can no longer be edited." : "Each generated phase becomes editable as soon as it arrives. Edit it, then approve it to establish the current canonical version."}</p>
+        </div>
+        {!closed && <button type="button" className="spec-close-button" onClick={onClose} disabled={!allApproved || saving}>{saving ? "Saving..." : "Close Sprint Specification"}</button>}
+      </section>
+
+      <section className="dossier-content">
+        <div className="eyebrow">PHASE {String(specPhases.findIndex((phase) => phase.id === active.id) + 1).padStart(2, "0")}</div>
+        <h2>{active.label}</h2>
+        <p className="section-intro">Repository: {repoUrl.replace(/^https?:\/\//, "")}. {specApproved.includes(active.id) ? "This phase has an approved canonical version." : "Review and edit the generated content before approving it."}</p>
+        {content ? <div className="spec-editor-grid">
+          <div className="spec-editor-panel">
+            <div className="spec-panel-heading">Editable specification</div>
+            <textarea value={content} onChange={(event) => setDraft(active.id, event.target.value)} disabled={closed || saving} aria-label={`${active.label} editable specification`} />
+            <div className="spec-actions">
+              <span>{specApproved.includes(active.id) ? "Approved — approve again after further edits to overwrite the canonical file." : "Not yet approved."}</span>
+              {!closed && <button type="button" onClick={onApprove} disabled={saving}>{saving ? "Saving..." : specApproved.includes(active.id) ? "Approve Changes" : "Approve"}</button>}
+            </div>
+          </div>
+          <article className="evidence-card markdown-content spec-preview">
+            <div className="spec-panel-heading">Preview</div>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </article>
+        </div> : <div className="progress-screen"><div className="spinner"/><div><div className="eyebrow">WAITING FOR SPECIFICATION OUTPUT</div><h1>{loading ? "The next phase is being prepared." : "No specification output is available yet."}</h1><p>The workflow runs sequentially so each phase can use the preceding phase as context.</p></div></div>}
+      </section>
+    </main>
+  </div>;
+}
+
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
   const [intent, setIntent] = useState("");
@@ -102,6 +210,14 @@ export default function Home() {
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState("business-purpose");
+  const [specActivePhase, setSpecActivePhase] = useState("scope");
+  const [specResults, setSpecResults] = useState<Record<string, string>>({});
+  const [specDrafts, setSpecDrafts] = useState<Record<string, string>>({});
+  const [specApproved, setSpecApproved] = useState<string[]>([]);
+  const [specProjectId, setSpecProjectId] = useState<string | null>(null);
+  const [specSprintId, setSpecSprintId] = useState<string | null>(null);
+  const [specClosed, setSpecClosed] = useState(false);
+  const [specSaving, setSpecSaving] = useState(false);
   const [completedPhases, setCompletedPhases] = useState<string[]>([]);
   const [completionMessages, setCompletionMessages] = useState<string[]>([]);
   const [selectedPhases, setSelectedPhases] = useState<string[]>(defaultSelectedPhases);
@@ -175,6 +291,12 @@ export default function Home() {
     const nextActive = viewedCompletedPhase && completed.includes(viewedCompletedPhase) ? viewedCompletedPhase : status.active_phase || selected[0] || activePhase || completed[completed.length - 1] || phases[0].id;
     setRunId(status.run_id); setRepoUrl(status.repo_url); setSelectedPhases(selected);
     setCompletedPhases(completed); setActivePhase(nextActive);
+    if (objective === "specify") {
+      if (status.project_id) setSpecProjectId(status.project_id);
+      if (status.sprint_id) setSpecSprintId(status.sprint_id);
+      setSpecResults((previous) => ({ ...previous, ...status.results }));
+      setSpecDrafts((previous) => ({ ...previous, ...status.results }));
+    }
     setFailedPhases((status.failures ?? []).map((failure) => failure.phase));
     setAnalysisResult((previous) => {
       const next = { ...(previous ?? emptyResult(status.repo_url)), repo_url: status.repo_url };
@@ -251,6 +373,7 @@ export default function Home() {
           api_key: apiKey,
           mode,
           objective,
+          intent: objective === "specify" ? intent : undefined,
         }),
       });
 
@@ -309,9 +432,23 @@ export default function Home() {
           if (eventData.type === "phase_completed") {
             setRunId(eventData.run_id);
 
+            if (objective === "specify") {
+              if (eventData.project_id) setSpecProjectId(eventData.project_id);
+              if (eventData.sprint_id) setSpecSprintId(eventData.sprint_id);
+              if (eventData.provenance?.project_id) setSpecProjectId(eventData.provenance.project_id);
+              if (eventData.provenance?.sprint_id) setSpecSprintId(eventData.provenance.sprint_id);
+              setSpecResults((previous) => ({ ...previous, [eventData.phase]: eventData.raw_analysis }));
+              setSpecDrafts((previous) => ({ ...previous, [eventData.phase]: eventData.raw_analysis }));
+              setCompletedPhases((previous) => previous.includes(eventData.phase) ? previous : [...previous, eventData.phase]);
+              setSpecActivePhase(eventData.phase);
+              setProvenance({ model: eventData.provenance?.model || model });
+              setCompletionMessages((previous) => previous.includes(eventData.phase_name) ? previous : [...previous, `${eventData.phase_name} phase completed`]);
+              return;
+            }
+
             setProvenance(
               eventData.provenance
-                ? { model: eventData.provenance.model }
+                ? { model: eventData.provenance.model || model }
                 : { model }
             );
 
@@ -407,9 +544,57 @@ export default function Home() {
     catch (err) { setStopping(false); setError(err instanceof Error ? err.message : "Unable to stop the analysis."); }
   }
 
+  async function approveSpecificationPhase() {
+    if (!specProjectId || !specSprintId || !specActivePhase || specClosed) return;
+    const contentToApprove = specDrafts[specActivePhase] ?? specResults[specActivePhase] ?? "";
+    if (!contentToApprove.trim()) return;
+    setSpecSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: specActivePhase, content: contentToApprove }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.detail || "The specification could not be approved.");
+      }
+      setSpecResults((previous) => ({ ...previous, [specActivePhase]: contentToApprove }));
+      setSpecApproved((previous) => previous.includes(specActivePhase) ? previous : [...previous, specActivePhase]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to approve the specification.");
+    } finally {
+      setSpecSaving(false);
+    }
+  }
+
+  async function closeSpecification() {
+    if (!specProjectId || !specSprintId || specClosed) return;
+    if (specApproved.length !== specificationPhases.length) {
+      setError("Approve all six specification phases before closing the sprint specification.");
+      return;
+    }
+    if (!window.confirm("Close this Sprint Specification? The approved specification will become immutable and will be the coding baseline.")) return;
+    setSpecSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/specification/${specProjectId}/${specSprintId}/close`, { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.detail || "The sprint specification could not be closed.");
+      }
+      setSpecClosed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to close the sprint specification.");
+    } finally {
+      setSpecSaving(false);
+    }
+  }
+
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = phases.find((phase) => phase.id === activePhase) ?? phases[0];
