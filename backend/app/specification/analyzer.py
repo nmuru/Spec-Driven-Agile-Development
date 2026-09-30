@@ -20,6 +20,7 @@ SPECIFICATION_PHASES = [
     ("scope", "Scope"),
     ("business-requirements", "Business Requirements"),
     ("software-requirements", "Software Requirements Specification"),
+    ("technology", "Technology Specification"),
     ("design", "Design"),
     ("tasks", "Implementation Tasks"),
     ("review", "Specification Review"),
@@ -128,6 +129,7 @@ def analyze_specification(
             "software_requirements": outputs["software-requirements"],
             "design": outputs["design"],
             "tasks": outputs["tasks"],
+            "technology": outputs["technology"],
             "specification": outputs["review"],
             "review": outputs["review"],
         }
