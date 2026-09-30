@@ -54,6 +54,7 @@ const specificationPhases: SpecPhase[] = [
   { id: "scope", label: "Scope" },
   { id: "business-requirements", label: "Business Requirements" },
   { id: "software-requirements", label: "Software Requirements Specification" },
+  { id: "technology", label: "Technology Specification" },
   { id: "design", label: "Design" },
   { id: "tasks", label: "Implementation Tasks" },
   { id: "review", label: "Specification Review" },
@@ -91,7 +92,7 @@ const providers = [
   { id: "openai", label: "OpenAI", placeholder: "e.g. gpt-5" },
 ];
 
-const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
+const STORAGE_KEY = "spec-driven-agile-development:v1-workspace";
 
 function emptyResult(repoUrl = ""): AnalysisResult {
   return { repo_url: repoUrl, business_purpose: "", scope: "", business_requirements: "", features: "", software_requirements: "", technology_architecture: "", design_pattern: "", high_level_design: "", low_level_design: "", implementation_detail: "", testing_harness: "", future_directions: "" };
@@ -641,7 +642,7 @@ export default function Home() {
   const progressText = `${completedPhases.length} of ${denominator} phases have completed. You can read completed phases while the remaining phases continue running.`;
 
   return <div className="app-shell">
-    <header className="topbar"><div><div className="brand">ReverseEngineer-SDLC</div><div className="tagline">Repository → Software Engineering Dossier</div></div>{analysisStarted && repoUrl && <div className="repo-pill" title={repoUrl}>{repoUrl.replace(/^https?:\/\//, "")}</div>}</header>
+    <header className="topbar"><div><div className="brand">Spec Driven Agile Development</div><div className="tagline">Repository → Software Engineering Dossier</div></div>{analysisStarted && repoUrl && <div className="repo-pill" title={repoUrl}>{repoUrl.replace(/^https?:\/\//, "")}</div>}</header>
     {!analysisStarted ? <main className="landing"><div className="landing-card"><div className="eyebrow">AI SOFTWARE REVERSE ENGINEERING</div><h1>Turn a GitHub repository into an SDLC dossier.</h1><p className="landing-copy">Submit a repository URL to progressively reconstruct its business purpose, business requirements, features, software requirements, architecture, design, implementation, testing strategy, and future directions. If you are enhancing an application through a spec-driven development approach, you can use this app to reverse engineer the existing codebase and build specifications that support further development.</p>
       
       
