@@ -29,7 +29,7 @@ SPECIFICATION_PHASES = [
 def analyze_specification(
     *,
     intent: str,
-    repo_url: str,
+    repo_url: str | None,
     output_run_dir: Path,
     provider: str,
     model: str,
@@ -40,8 +40,6 @@ def analyze_specification(
     """Turn technical intent into a human-editable, implementation-ready specification."""
     if not intent or not intent.strip():
         raise ValueError("intent cannot be empty")
-    if not repo_url or not repo_url.strip():
-        raise ValueError("repo_url cannot be empty")
 
     run_id = output_run_dir.name or uuid.uuid4().hex
     output_run_dir.mkdir(parents=True, exist_ok=True)
@@ -58,11 +56,19 @@ def analyze_specification(
     )
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
-        repository = clone_repository(repo_url, Path(tmp), run_control=run_control)
-        intelligence = collect_repository_intelligence(repository)
-        repository_context = (
-            "DETERMINISTIC REPOSITORY CONTEXT\n\n" + intelligence.to_json()
-        )
+        repository = Path(tmp)
+        if repo_url:
+            repository = clone_repository(repo_url, repository, run_control=run_control)
+            intelligence = collect_repository_intelligence(repository)
+            repository_context = (
+                "DETERMINISTIC REPOSITORY CONTEXT\n\n" + intelligence.to_json()
+            )
+        else:
+            repository_context = (
+                "NO REPOSITORY WAS PROVIDED. Derive the specification from the human-authored "
+                "Intent and prior specification outputs only. Do not invent repository-specific "
+                "technology or implementation details."
+            )
 
         outputs: dict[str, str] = {}
         previous = None
