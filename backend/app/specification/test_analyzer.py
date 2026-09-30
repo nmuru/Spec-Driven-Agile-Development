@@ -54,3 +54,29 @@ def test_specification_phases_run_in_order(monkeypatch, tmp_path):
     assert result["review"] == "output:review"
     assert result["project_id"] == "example-project"
     assert result["sprint_id"] == "sprint-001"
+
+
+def test_specification_can_run_without_repository(monkeypatch, tmp_path):
+    monkeypatch.setattr(analyzer, "SpecificationStore", lambda: SpecificationStore(tmp_path / "spec_output"))
+
+    calls = []
+
+    def fake_agent(**kwargs):
+        calls.append(kwargs["repository_context"])
+        return f"output:{kwargs['agent']}", "test-model"
+
+    monkeypatch.setattr(analyzer, "run_specification_agent", fake_agent)
+
+    result = analyzer.analyze_specification(
+        intent="Build a new storefront",
+        repo_url=None,
+        output_run_dir=tmp_path / "run-2",
+        provider="openai",
+        model="test-model",
+        api_key="test-key",
+    )
+
+    assert result["project_id"].startswith("intent-")
+    assert result["sprint_id"] == "sprint-001"
+    assert len(calls) == len(analyzer.SPECIFICATION_PHASES)
+    assert all("NO REPOSITORY WAS PROVIDED" in value for value in calls)
