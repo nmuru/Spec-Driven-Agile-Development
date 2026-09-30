@@ -1,11 +1,8 @@
-import type { NextConfig } from "next";
-
-const Production_mode = true;
+import type { NextConfig } from "next"; 
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_API_URL: Production_mode
-      ? "https://blvd-bob-sailing-inner.trycloudflare.com"
+    NEXT_PUBLIC_API_URL
       : "http://localhost:8000",
   },
 };

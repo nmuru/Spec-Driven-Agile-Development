@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     openai_model: str = "openrouter/free"
     openrouter_api_key: str | None = None
     openai_api_key: str | None = None
-    allowed_origins: str = "http://3.91.148.139:3000,https://sdlc-dossier.vercel.app"
+    allowed_origins: str = "http://localhost:3000"
     phases_per_batch: int = 1
     analysis_results_dir: str = "output-content"
     spec_output_dir: str = "spec_output"

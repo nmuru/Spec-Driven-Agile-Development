@@ -53,6 +53,7 @@ temp/
 tmp/
 cache/
 logs/
+spec_output/
 
 *.log
 
