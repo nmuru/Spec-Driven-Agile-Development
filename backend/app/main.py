@@ -148,11 +148,11 @@ def analysis_status(work_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/specification/{project_id}/{sprint_id}")
-def get_specification_sprint(project_id: str, sprint_id: str) -> dict[str, Any]:
+def get_specification_sprint(project_id: str, sprint_id: str, project_folder: str, product_name: str) -> dict[str, Any]:
     if any(Path(value).name != value for value in (project_id, sprint_id)):
         raise HTTPException(status_code=404, detail="Specification not found")
     try:
-        return SpecificationStore().get_sprint(project_id, sprint_id, include_content=True)
+        return SpecificationStore(project_folder=project_folder, product_name=product_name).get_sprint(project_id, sprint_id, include_content=True)
     except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=404, detail="Specification not found") from exc
 
@@ -164,7 +164,7 @@ async def approve_specification_phase(project_id: str, sprint_id: str, payload: 
     phase = str(payload.get("phase", "")).strip()
     content = str(payload.get("content", ""))
     try:
-        state = SpecificationStore().approve_phase(project_id, sprint_id, phase, content)
+        state = SpecificationStore(project_folder=str(payload.get("project_folder", "")), product_name=str(payload.get("product_name", ""))).approve_phase(project_id, sprint_id, phase, content)
         return {"status": "approved", "phase": phase, "state": state}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Specification not found") from exc
@@ -173,11 +173,11 @@ async def approve_specification_phase(project_id: str, sprint_id: str, payload: 
 
 
 @app.post("/api/specification/{project_id}/{sprint_id}/close")
-def close_specification_sprint(project_id: str, sprint_id: str) -> dict[str, Any]:
+def close_specification_sprint(project_id: str, sprint_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     if any(Path(value).name != value for value in (project_id, sprint_id)):
         raise HTTPException(status_code=404, detail="Specification not found")
     try:
-        state = SpecificationStore().close_sprint(project_id, sprint_id)
+        state = SpecificationStore(project_folder=str(payload.get("project_folder", "")), product_name=str(payload.get("product_name", ""))).close_sprint(project_id, sprint_id)
         return {"status": state["status"], "state": state}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Specification not found") from exc
@@ -273,6 +273,8 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         api_key=request.api_key,
         run_control=control,
         on_phase_complete=handle_phase_complete,
+        product_name=request.product_name,
+        project_folder=request.project_folder,
     )
 
     # Keep the reviewed artifact addressable as the final specification.
