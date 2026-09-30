@@ -13,7 +13,7 @@ from ..agent_runner import run_specification_agent
 from ..cancellable_clone import clone_repository
 from ..repository_intelligence import collect_repository_intelligence
 from ..run_control import RunControl
-from .store import SpecificationStore
+from ..specification_store import SpecificationStore
 
 
 SPECIFICATION_PHASES = [
