@@ -375,6 +375,8 @@ export default function Home() {
     event.preventDefault();
     const phasesToRun = objective === "specify" ? specificationPhases.map((phase) => phase.id) : selectedPhases.filter((phase) => !completedPhases.includes(phase));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
+    if (!productName.trim()) { setError("Enter a Product Name before starting."); return; }
+    if (!projectFolder.trim()) { setError("Enter the Project Folder location before starting."); return; }
     if (objective !== "specify" && !repoUrl.trim()) { setError("Enter a repository URL before starting."); return; }
     if (objective !== "specify" && phasesToRun.length === 0) { setError("Select at least one new SDLC phase before starting."); return; }
     if (objective === "specify" && !productName.trim()) { setError("Enter a Product Name before starting."); return; }
@@ -406,8 +408,8 @@ export default function Home() {
           mode,
           objective,
           intent: objective === "specify" ? intent : undefined,
-          product_name: objective === "specify" ? productName.trim() : undefined,
-          project_folder: objective === "specify" ? projectFolder.trim() : undefined,
+          product_name: productName.trim(),
+          project_folder: projectFolder.trim(),
         }),
       });
 
