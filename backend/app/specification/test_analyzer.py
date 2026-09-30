@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.specification import analyzer
-from app.specification.store import SpecificationStore
+from app.specification_store import SpecificationStore
 
 
 def test_specification_phases_run_in_order(monkeypatch, tmp_path):
