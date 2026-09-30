@@ -92,13 +92,20 @@ def analyze_specification(
                     "raw_analysis": result,
                     "raw_path": str(phase_dir / "output.md"),
                     "run_id": run_id,
-        "project_id": project_id,
-        "sprint_id": sprint_id,
-                    "provenance": {"workflow": "specification", "intent": intent.strip()},
+                    "project_id": project_id,
+                    "sprint_id": sprint_id,
+                    "provenance": {
+                        "workflow": "specification",
+                        "intent": intent.strip(),
+                        "project_id": project_id,
+                        "sprint_id": sprint_id,
+                    },
                 })
 
         return {
             "run_id": run_id,
+            "project_id": project_id,
+            "sprint_id": sprint_id,
             "intent": intent.strip(),
             "scope": outputs["scope"],
             "business_requirements": outputs["business-requirements"],
