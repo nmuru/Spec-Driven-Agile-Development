@@ -13,6 +13,7 @@ from ..agent_runner import run_specification_agent
 from ..cancellable_clone import clone_repository
 from ..repository_intelligence import collect_repository_intelligence
 from ..run_control import RunControl
+from .store import SpecificationStore
 
 
 SPECIFICATION_PHASES = [
@@ -45,6 +46,12 @@ def analyze_specification(
     run_id = output_run_dir.name or uuid.uuid4().hex
     output_run_dir.mkdir(parents=True, exist_ok=True)
     (output_run_dir / "intent.md").write_text(intent.strip(), encoding="utf-8")
+
+    # Durable sprint state is separate from the transient run workspace.
+    store = SpecificationStore()
+    sprint_state = store.get_or_create_active_sprint(repo_url, intent)
+    project_id = sprint_state["project_id"]
+    sprint_id = sprint_state["sprint_id"]
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
         repository = clone_repository(repo_url, Path(tmp), run_control=run_control)
@@ -85,6 +92,8 @@ def analyze_specification(
                     "raw_analysis": result,
                     "raw_path": str(phase_dir / "output.md"),
                     "run_id": run_id,
+        "project_id": project_id,
+        "sprint_id": sprint_id,
                     "provenance": {"workflow": "specification", "intent": intent.strip()},
                 })
 
