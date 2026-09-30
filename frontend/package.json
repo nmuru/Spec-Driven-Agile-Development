@@ -1,5 +1,5 @@
 {
-  "name": "reverseengineer-sdlc-frontend",
+  "name": "spec-driven-agile-development-frontend",
   "private": true,
   "scripts": {
     "dev": "next dev",
