@@ -124,23 +124,6 @@ class SpecificationStore:
     ) -> dict:
         project_id = self.project_id(repo_url, intent, product_name)
         with _store_lock:
-            for number in reversed(self._sprint_numbers(project_id)):
-                sprint_id = f"sprint-{number:03d}"
-                try:
-                    state = self._read_state(project_id, sprint_id)
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if state.get("status") == "active":
-                    existing_intent = self._sprint_dir(project_id, sprint_id) / "intent.md"
-                    if existing_intent.is_file():
-                        current_intent = existing_intent.read_text(encoding="utf-8").strip()
-                        if current_intent != intent.strip():
-                            raise ValueError(
-                                f"An active sprint already exists for {project_id}/{sprint_id} with a different Intent. "
-                                "Complete or close that sprint before starting a new Intent."
-                            )
-                    return state
-
             next_number = (self._sprint_numbers(project_id) or [0])[-1] + 1
             sprint_id = f"sprint-{next_number:03d}"
             sprint_dir = self._sprint_dir(project_id, sprint_id)
