@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import hashlib
 from pathlib import Path
 import re
 import threading
@@ -46,15 +47,19 @@ class SpecificationStore:
         self.root = configured if configured.is_absolute() else Path(__file__).resolve().parents[2] / configured
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def project_id(self, repo_url: str) -> str:
-        parsed = urlparse(repo_url.strip())
-        parts = [part for part in parsed.path.strip("/").split("/") if part]
-        if len(parts) >= 2:
-            owner = parts[0]
-            repo = parts[1].removesuffix(".git")
-            return _safe_slug(f"{owner}-{repo}")
-        host = parsed.hostname or "repository"
-        return _safe_slug(host)
+    def project_id(self, repo_url: str | None, intent: str | None = None) -> str:
+        if repo_url and repo_url.strip():
+            parsed = urlparse(repo_url.strip())
+            parts = [part for part in parsed.path.strip("/").split("/") if part]
+            if len(parts) >= 2:
+                owner = parts[0]
+                repo = parts[1].removesuffix(".git")
+                return _safe_slug(f"{owner}-{repo}")
+            host = parsed.hostname or "repository"
+            return _safe_slug(host)
+
+        digest = hashlib.sha256((intent or "").strip().encode("utf-8")).hexdigest()[:12]
+        return f"intent-{digest}"
 
     def project_dir(self, project_id: str) -> Path:
         return self.root / _safe_slug(project_id)
@@ -89,8 +94,8 @@ class SpecificationStore:
                 numbers.append(int(match.group(1)))
         return sorted(numbers)
 
-    def get_or_create_active_sprint(self, repo_url: str, intent: str) -> dict:
-        project_id = self.project_id(repo_url)
+    def get_or_create_active_sprint(self, repo_url: str | None, intent: str) -> dict:
+        project_id = self.project_id(repo_url, intent)
         with _store_lock:
             project = self.project_dir(project_id)
             project.mkdir(parents=True, exist_ok=True)
