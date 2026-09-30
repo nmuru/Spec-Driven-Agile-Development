@@ -83,7 +83,7 @@ def _run_batch(batch: list[tuple[str, str]], repository: Path, phase_packages: d
     with ThreadPoolExecutor(max_workers=len(batch)) as executor:
         for key, name in batch:
             _check_cancelled(run_control)
-            future = executor.submit(_run_single_phase, key, name, repository, phase_packages[key], output_run_dir, run_id, provider, model, api_key, diagnostics, batch_index, run_control, objective, product_name, project_folder)
+            future = executor.submit(_run_single_phase, key, name, repository, phase_packages[key], output_run_dir, run_id, provider, model, api_key, diagnostics, batch_index, run_control, objective)
             phase_by_future[future] = (key, name)
         for future in as_completed(phase_by_future):
             key, name = phase_by_future[future]
