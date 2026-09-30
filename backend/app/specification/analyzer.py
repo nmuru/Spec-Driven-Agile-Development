@@ -31,6 +31,8 @@ def analyze_specification(
     intent: str,
     repo_url: str | None,
     output_run_dir: Path,
+    product_name: str | None = None,
+    project_folder: str | None = None,
     provider: str,
     model: str,
     api_key: str,
@@ -46,8 +48,8 @@ def analyze_specification(
     (output_run_dir / "intent.md").write_text(intent.strip(), encoding="utf-8")
 
     # Durable sprint state is separate from the transient run workspace.
-    store = SpecificationStore()
-    sprint_state = store.get_or_create_active_sprint(repo_url, intent)
+    store = SpecificationStore(project_folder=project_folder, product_name=product_name)
+    sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
     project_id = sprint_state["project_id"]
     sprint_id = sprint_state["sprint_id"]
     (output_run_dir / "specification-context.json").write_text(
