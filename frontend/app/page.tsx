@@ -178,7 +178,7 @@ function SpecifyWorkspace({
       <section className="dossier-content">
         <div className="eyebrow">PHASE {String(specPhases.findIndex((phase) => phase.id === active.id) + 1).padStart(2, "0")}</div>
         <h2>{active.label}</h2>
-        <p className="section-intro">Repository: {repoUrl.replace(/^https?:\/\//, "")}. {specApproved.includes(active.id) ? "This phase has an approved canonical version." : "Review and edit the generated content before approving it."}</p>
+        <p className="section-intro">Repository: {repoUrl.trim() ? repoUrl.replace(/^https?:\/\//, "") : "Intent-driven (no repository supplied)"}. {specApproved.includes(active.id) ? "This phase has an approved canonical version." : "Review and edit the generated content before approving it."}</p>
         {content ? <div className="spec-editor-grid">
           <div className="spec-editor-panel">
             <div className="spec-panel-heading">Editable specification</div>
@@ -373,7 +373,9 @@ export default function Home() {
     event.preventDefault();
     const phasesToRun = objective === "specify" ? specificationPhases.map((phase) => phase.id) : selectedPhases.filter((phase) => !completedPhases.includes(phase));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
-    if (!repoUrl.trim() || phasesToRun.length === 0) { setError("Enter a repository URL and select at least one new SDLC phase before starting."); return; }
+    if (objective !== "specify" && !repoUrl.trim()) { setError("Enter a repository URL before starting."); return; }
+    if (objective !== "specify" && phasesToRun.length === 0) { setError("Select at least one new SDLC phase before starting."); return; }
+    if (objective === "specify" && !intent.trim()) { setError("Enter the Specify Intent before starting."); return; }
     viewedCompletedPhaseRef.current = null;
     continuationStartingRef.current = Boolean(runId && !isDemo);
     const nextRunId = runId && !isDemo ? runId : makeRunId();
@@ -680,7 +682,7 @@ export default function Home() {
       {objective !== "specify" && (        <fieldset className="phase-selection" style={{ marginTop: 18 }}><legend>Analysis mode</legend><div style={{ display: "grid", gap: 10 }}><label className="phase-option" style={{ alignItems: "flex-start" }} title="Parallel completes phases faster. Sequential runs phases one after another, allowing later phases to use the results of earlier phases."><input type="radio" name="analysis-mode" value="parallel" checked={mode === "parallel"} onChange={() => setMode("parallel")} disabled={loading} /><span><strong>Parallel</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs phases in parallel.</span></span></label><label className="phase-option" style={{ alignItems: "flex-start" }} title="Parallel completes phases faster. Sequential runs phases one after another, allowing later phases to use the results of earlier phases."><input type="radio" name="analysis-mode" value="sequence" checked={mode === "sequence"} onChange={() => setMode("sequence")} disabled={loading} /><span><strong>Sequential</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs phases one after another; later phases can use earlier phase results.</span></span></label></div></fieldset>
       )}
 
-      <form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="https://github.com/owner/repository" type="url" required aria-label="GitHub repository URL" /><button type="submit" disabled={loading}>{loading ? (objective === "specify" ? "Building specification..." : "Reverse engineering...") : (objective === "specify" ? "Start Specify" : "Reverse engineer")}</button></form>
+      <form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder={objective === "specify" ? "Optional: https://github.com/owner/repository" : "https://github.com/owner/repository"} type="url" required={objective !== "specify"} aria-label="GitHub repository URL" /><button type="submit" disabled={loading}>{loading ? (objective === "specify" ? "Building specification..." : "Reverse engineering...") : (objective === "specify" ? "Start Specify" : "Reverse engineer")}</button></form>
       {objective !== "specify" && (        <fieldset className="phase-selection"><legend>Select SDLC phases</legend><div className="phase-selection-grid">{phases.map((phase) => <label key={phase.id} className="phase-option"><input type="checkbox" checked={selectedPhases.includes(phase.id)} onChange={() => setSelectedPhases((previous) => previous.includes(phase.id) ? previous.filter((id) => id !== phase.id) : [...previous, phase.id])} disabled={loading} /><span>{phase.label}</span></label>)}</div></fieldset>
       )}
       {error && <div className="error-banner" role="alert">{error}</div>}<div className="landing-note">Analysis is performed by the backend coding-agent pipeline.</div>
