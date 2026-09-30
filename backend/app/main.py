@@ -320,6 +320,10 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         raise HTTPException(status_code=422, detail="product_name is required")
     if not (request.project_folder or "").strip():
         raise HTTPException(status_code=422, detail="project_folder is required")
+    try:
+        SpecificationStore(project_folder=request.project_folder, product_name=request.product_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     effective_mode = "sequence" if request.objective == "specify" else request.mode
 
     try:
