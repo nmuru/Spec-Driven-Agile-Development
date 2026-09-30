@@ -52,6 +52,10 @@ def analyze_specification(
     sprint_state = store.get_or_create_active_sprint(repo_url, intent)
     project_id = sprint_state["project_id"]
     sprint_id = sprint_state["sprint_id"]
+    (output_run_dir / "specification-context.json").write_text(
+        __import__("json").dumps({"project_id": project_id, "sprint_id": sprint_id}, indent=2),
+        encoding="utf-8",
+    )
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
         repository = clone_repository(repo_url, Path(tmp), run_control=run_control)
@@ -64,6 +68,8 @@ def analyze_specification(
         previous = None
 
         for phase_key, phase_name in SPECIFICATION_PHASES:
+            if run_control is not None:
+                run_control.phase_started(phase_key)
             result, actual_model = run_specification_agent(
                 agent=phase_key,
                 agent_name=phase_name,
@@ -84,6 +90,8 @@ def analyze_specification(
             phase_dir.mkdir(parents=True, exist_ok=True)
             (phase_dir / "output.md").write_text(result, encoding="utf-8")
             (phase_dir / "model.txt").write_text(actual_model, encoding="utf-8")
+            if run_control is not None:
+                run_control.phase_completed(phase_key)
 
             if on_phase_complete is not None:
                 on_phase_complete({
