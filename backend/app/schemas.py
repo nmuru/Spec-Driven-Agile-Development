@@ -11,6 +11,8 @@ class AnalyzeRequest(BaseModel):
     mode: str = "parallel"
     objective: str = "document"
     intent: str | None = None
+    product_name: str | None = None
+    project_folder: str | None = None
 
 
 class AnalyzeResponse(BaseModel):
