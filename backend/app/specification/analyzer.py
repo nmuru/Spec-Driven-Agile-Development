@@ -60,6 +60,7 @@ def analyze_specification(
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
         repository = Path(tmp)
+        project_context = store.read_project_document()
         if repo_url:
             repository = clone_repository(repo_url, repository, run_control=run_control)
             intelligence = collect_repository_intelligence(repository)
@@ -68,8 +69,8 @@ def analyze_specification(
             )
         else:
             repository_context = (
-                "NO REPOSITORY WAS PROVIDED. Derive the specification from the human-authored "
-                "Intent and prior specification outputs only. Do not invent repository-specific "
+                "NO REPOSITORY WAS PROVIDED. Derive the specification from project.md, Intent, "
+                "and prior specification outputs only. Do not invent repository-specific "
                 "technology or implementation details."
             )
 
@@ -84,7 +85,12 @@ def analyze_specification(
                 agent_name=phase_name,
                 repository=repository,
                 intent=intent.strip(),
-                repository_context=repository_context,
+                repository_context=(
+                    "PROJECT CONTEXT FROM project.md\n\n"
+                    + project_context
+                    + "\n\n"
+                    + repository_context
+                ),
                 previous_output=previous,
                 provider=provider,
                 model=model,
