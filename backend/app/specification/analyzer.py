@@ -60,7 +60,7 @@ def analyze_specification(
 
     with tempfile.TemporaryDirectory(prefix="specification-") as tmp:
         repository = Path(tmp)
-        project_context = store.read_project_document()
+        project_context = store.read_project_document() if (project_folder and product_name) else "NO project.md context was supplied by the direct test/in-process caller."
         if repo_url:
             repository = clone_repository(repo_url, repository, run_control=run_control)
             intelligence = collect_repository_intelligence(repository)
