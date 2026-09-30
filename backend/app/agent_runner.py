@@ -631,7 +631,7 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
 
     if workflow == "specification":
         common_instructions = """You are performing an evidence-driven software specification workflow.
-The human-authored intent is the primary source of desired outcomes and constraints. Repository intelligence is supporting technical evidence about the existing system.
+project.md is the stable, human-authored product context and must be considered for every sprint. The human-authored intent contains the current Sprint Goal and Sprint Backlog and is the authoritative sprint scope. Repository intelligence is supporting technical evidence about the existing system.
 Do not turn the request into an SDLC documentation exercise. Do not invent requirements, silently resolve ambiguity, or allow repository conventions to override explicit intent without making the conflict visible.
 The repository is read-only. Use repository tools only for targeted verification.
 Durable spec_output is also available through dedicated read-only tools. Previous closed sprint specifications are historical context, not a replacement for the current human-authored intent.
@@ -778,7 +778,7 @@ def run_specification_agent(
 
     phase = f"specification/{agent}"
     phase_intelligence = (
-        "HUMAN-AUTHORED INTENT\n\n"
+        "CURRENT SPRINT INTENT (Sprint Goal + Sprint Backlog)\n\n"
         + intent.strip()
         + "\n\n"
         + repository_context
