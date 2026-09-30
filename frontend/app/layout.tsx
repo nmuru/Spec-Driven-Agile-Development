@@ -8,8 +8,8 @@ import SessionExpiryControl from "./session-expiry-control";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
-  title: "ReverseEngineer-SDLC",
-  description: "Reverse engineer GitHub repositories into SDLC documentation.",
+  title: "Spec Driven Agile Development",
+  description: "Spec-driven agile development from project context and sprint backlog.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
