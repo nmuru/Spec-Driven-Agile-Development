@@ -393,7 +393,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          repo_url: repoUrl,
+          repo_url: repoUrl.trim() ? repoUrl.trim() : null,
           selected_phases: phasesToRun,
           work_id: nextRunId,
           provider,
