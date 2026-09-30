@@ -24,7 +24,7 @@ from .specification_store import SPECIFICATION_PHASE_FILES, SpecificationStore
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ReverseEngineer-SDLC API", version="0.2.0")
+app = FastAPI(title="Spec Driven Agile Development API", version="0.3.0")
 app.add_middleware(CORSMiddleware, 
                    allow_origins=[origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
