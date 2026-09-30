@@ -65,7 +65,7 @@ class SpecificationStore:
         return self.root / _safe_slug(project_id)
 
     def _sprint_dir(self, project_id: str, sprint_id: str) -> Path:
-        return self.project_dir(project_id) / _safe_slug(sprint_id)
+        return self.root / _safe_slug(sprint_id)
 
     def _state_path(self, project_id: str, sprint_id: str) -> Path:
         return self._sprint_dir(project_id, sprint_id) / "sprint-state.json"
@@ -94,8 +94,8 @@ class SpecificationStore:
                 numbers.append(int(match.group(1)))
         return sorted(numbers)
 
-    def get_or_create_active_sprint(self, repo_url: str | None, intent: str) -> dict:
-        project_id = self.project_id(repo_url, intent)
+    def get_or_create_active_sprint(self, repo_url: str | None, intent: str, product_name: str | None = None) -> dict:
+        project_id = self.project_id(product_name, repo_url, intent)
         with _store_lock:
             project = self.project_dir(project_id)
             project.mkdir(parents=True, exist_ok=True)
@@ -125,7 +125,7 @@ class SpecificationStore:
             state = {
                 "project_id": project_id,
                 "sprint_id": sprint_id,
-                "repo_url": repo_url,
+                "product_name": product_name or project_id,\n                "repo_url": repo_url,
                 "status": "active",
                 "created_at": _utc_now(),
                 "closed_at": None,
