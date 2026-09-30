@@ -238,7 +238,7 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
             "repository": ["list_files","glob","grep", "read_file", "search_repository"],
             "runtime_resources": ["list_resources", "read_resource"],
             "output_content": ["list_previous_phase_outputs", "read_previous_phase_output"],
-            "spec_output": ["list_spec_projects", "list_spec_sprints", "list_specification_phases", "read_spec_output"],
+            "spec_output": ["list_spec_projects", "list_spec_sprints", "list_specification_phases", "read_spec_output", "list_project_documents", "read_project_document"],
         },
     }
     if skill_dir.is_dir():
@@ -397,6 +397,34 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
 
 
     @function_tool
+    def list_project_documents(project_id: str) -> str:
+        """List current durable SDLC document artifacts for a project."""
+        project_dir = spec_store.project_dir(project_id)
+        document_dir = (project_dir / "document").resolve()
+        root_dir = project_dir.resolve()
+        if root_dir != document_dir and root_dir not in document_dir.parents:
+            return "Invalid project."
+        if not document_dir.is_dir():
+            return "No current document artifacts are available."
+        files = sorted(path.relative_to(document_dir).as_posix() for path in document_dir.rglob("*") if path.is_file())
+        return "\\n".join(files) if files else "No current document artifacts are available."
+
+    @function_tool
+    def read_project_document(project_id: str, filename: str, max_chars: int = 30000) -> str:
+        """Read one current durable SDLC document artifact for a project."""
+        project_dir = spec_store.project_dir(project_id).resolve()
+        document_dir = (project_dir / "document").resolve()
+        target = (document_dir / filename).resolve()
+        if document_dir != target and document_dir not in target.parents:
+            return "Invalid document path."
+        if not target.is_file():
+            return "Document artifact does not exist."
+        try:
+            return target.read_text(encoding="utf-8", errors="replace")[:max_chars]
+        except OSError as exc:
+            return f"Unable to read document artifact: {exc}"
+
+    @function_tool
     def list_spec_projects() -> str:
         """List durable specification projects available to this application."""
         projects = spec_store.list_projects()
@@ -538,6 +566,8 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         list_previous_phase_outputs,
         read_previous_phase_output,
         list_spec_projects,
+        list_project_documents,
+        read_project_document,
         list_spec_sprints,
         list_specification_phases,
         read_spec_output,
