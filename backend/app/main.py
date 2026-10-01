@@ -259,6 +259,18 @@ def download_analysis(work_id: str) -> FileResponse:
 
 def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, control: RunControl, on_phase_complete) -> dict[str, Any]:
     phase_results: dict[str, Any] = {}
+    context_path = output_run_dir / "specification-context.json"
+    existing_project_id = None
+    existing_sprint_id = None
+    if context_path.is_file():
+        try:
+            context = json.loads(context_path.read_text(encoding="utf-8"))
+            existing_project_id = context.get("project_id")
+            existing_sprint_id = context.get("sprint_id")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    phase_key = (request.selected_phases or ["business-requirements"])[0]
 
     def handle_phase_complete(result: dict[str, Any]) -> None:
         phase_results[result["phase"]] = result
@@ -275,23 +287,11 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         on_phase_complete=handle_phase_complete,
         product_name=request.product_name,
         project_folder=request.project_folder,
+        phase_key=phase_key,
+        existing_project_id=existing_project_id,
+        existing_sprint_id=existing_sprint_id,
     )
 
-    # Keep the reviewed artifact addressable as the final specification.
-    phase_results["specification"] = {
-        "phase": "specification",
-        "phase_name": "Specification",
-        "raw_analysis": specification["specification"],
-        "raw_path": str(output_run_dir / "review" / "output.md"),
-        "run_id": specification["run_id"],
-        "project_id": specification["project_id"],
-        "sprint_id": specification["sprint_id"],
-        "provenance": {
-            "workflow": "specification",
-            "project_id": specification["project_id"],
-            "sprint_id": specification["sprint_id"],
-        },
-    }
     return {"run_id": specification["run_id"], "results": phase_results, "failures": []}
 
 
