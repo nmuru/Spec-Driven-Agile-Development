@@ -13,13 +13,10 @@ from urllib.parse import urlparse
 from .config import settings
 
 SPECIFICATION_PHASE_FILES = {
-    "scope": "scope.md",
     "business-requirements": "business-requirements.md",
-    "software-requirements": "software-requirements.md",
     "technology": "technology.md",
     "design": "design.md",
     "tasks": "tasks.md",
-    "review": "specification.md",
 }
 SPECIFICATION_PHASES = tuple(SPECIFICATION_PHASE_FILES)
 _store_lock = threading.RLock()
