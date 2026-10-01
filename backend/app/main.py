@@ -290,6 +290,7 @@ def _run_specification_analysis(request: AnalyzeRequest, output_run_dir: Path, c
         phase_key=phase_key,
         existing_project_id=existing_project_id,
         existing_sprint_id=existing_sprint_id,
+        sprint_mode=request.sprint_mode,
     )
 
     return {"run_id": specification["run_id"], "results": phase_results, "failures": []}
