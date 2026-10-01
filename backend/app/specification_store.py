@@ -139,6 +139,30 @@ class SpecificationStore:
         except (FileNotFoundError, OSError, json.JSONDecodeError):
             return None
 
+    def reset_active_sprint(self, project_id: str, sprint_id: str, intent: str, repo_url: str | None, product_name: str | None = None) -> dict:
+        with _store_lock:
+            state = self._read_state(project_id, sprint_id)
+            if state.get("status") != "active":
+                raise ValueError("The latest sprint is already closed. Select New Sprint.")
+            sprint_dir = self._sprint_dir(project_id, sprint_id)
+            for path in sprint_dir.iterdir():
+                if path.is_file():
+                    path.unlink()
+            state = {
+                "project_id": project_id,
+                "sprint_id": sprint_id,
+                "product_name": product_name or project_id,
+                "repo_url": repo_url,
+                "status": "active",
+                "created_at": state.get("created_at") or _utc_now(),
+                "closed_at": None,
+                "specification_version": 0,
+                "approved_phases": [],
+            }
+            (sprint_dir / "intent.md").write_text(intent.strip() + "\n", encoding="utf-8")
+            self._write_state(project_id, sprint_id, state)
+            return state
+
     def get_or_create_active_sprint(
         self,
         repo_url: str | None,
