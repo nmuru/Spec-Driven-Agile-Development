@@ -630,14 +630,14 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
     if workflow == "specification":
-        common_instructions = """You are performing an evidence-driven software specification workflow.
-project.md is the stable, human-authored product context and must be considered for every sprint. The human-authored intent contains the current Sprint Goal and Sprint Backlog and is the authoritative sprint scope. Repository intelligence is supporting technical evidence about the existing system.
-Do not turn the request into an SDLC documentation exercise. Do not invent requirements, silently resolve ambiguity, or allow repository conventions to override explicit intent without making the conflict visible.
-The repository is read-only. Use repository tools only for targeted verification.
-Durable spec_output is also available through dedicated read-only tools. Previous closed sprint specifications are historical context, not a replacement for the current human-authored intent.
-Distinguish explicit intent, evidence-backed decisions, assumptions, and unresolved questions.
-Return only the requested specification workflow artifact in concise professional Markdown. These are working specifications consumed by a coding agent, not durable documentation. Include enough technical detail to implement and verify the sprint work, but omit explanatory prose, history, and documentation-style background. Do not describe the agent, tools, prompts, or execution process."""
-        task_instruction = "Perform your assigned specification role and produce the requested workflow artifact."
+        common_instructions = """You are performing a human-guided software specification workflow.
+project.md is stable product context. Intent is the human-authored starting point for the current development increment. Repository intelligence is supporting technical evidence when a repository exists.
+The specification artifacts are prompt-like working instructions for humans and coding agents, not traditional SDLC or IEEE documentation.
+Each phase is generated only after the preceding phase has been approved. Treat supplied approved phase outputs as authoritative working inputs for the current phase.
+Do not invent stakeholder decisions or silently resolve material ambiguity. Preserve explicit human decisions and make unresolved choices visible.
+Use repository tools only for targeted verification of the current implementation. Do not modify the repository.
+Return only the requested artifact in concise, readable Markdown. Prefer concrete decisions, behavior, structure, and executable guidance over explanatory documentation."""
+        task_instruction = "Perform your assigned specification role and produce a concise, human-editable working specification."
         agent_label = "Specification"
     else:
         common_instructions = """You are performing an evidence-driven SDLC reverse-engineering phase.
