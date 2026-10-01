@@ -589,10 +589,17 @@ export default function Home() {
 
   async function stopAnalysis() {
     if (!runId || stopping || !loading) return;
-    if (!window.confirm("Stop this analysis? No further phases will be started. Completed results will remain available.")) return;
+    if (!window.confirm("Stop this analysis and return to the landing page?")) return;
     setStopping(true); setError("");
-    try { const response = await fetch(`${API_BASE_URL}/api/analysis/${runId}/stop`, { method: "POST" }); if (!response.ok) throw new Error("The backend did not accept the stop request."); const status = await response.json() as RunStatus; applyStatus(status); }
-    catch (err) { setStopping(false); setError(err instanceof Error ? err.message : "Unable to stop the analysis."); }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/analysis/${runId}/stop`, { method: "POST" });
+      if (!response.ok) throw new Error("The backend did not accept the stop request.");
+      await response.json() as RunStatus;
+      resetAnalysis();
+    } catch (err) {
+      setStopping(false);
+      setError(err instanceof Error ? err.message : "Unable to stop the analysis.");
+    }
   }
 
   async function approveSpecificationPhase() {
