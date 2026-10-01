@@ -51,13 +51,10 @@ type RunStatus = { run_id: string; status: string; repo_url: string; selected_ph
 type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string; productName?: string; projectFolder?: string };
 
 const specificationPhases: SpecPhase[] = [
-  { id: "scope", label: "Scope" },
   { id: "business-requirements", label: "Business Requirements" },
-  { id: "software-requirements", label: "Software Requirements Specification" },
-  { id: "technology", label: "Technology Specification" },
+  { id: "technology", label: "Technology Architecture" },
   { id: "design", label: "Design" },
   { id: "tasks", label: "Implementation Tasks" },
-  { id: "review", label: "Specification Review" },
 ];
 
 const phases: Phase[] = [
@@ -114,6 +111,7 @@ function SpecifyWorkspace({
   setActivePhase,
   setDraft,
   onApprove,
+  onRetry,
   onClose,
   saving,
   closed,
@@ -134,6 +132,7 @@ function SpecifyWorkspace({
   setActivePhase: (phase: string) => void;
   setDraft: (phase: string, value: string) => void;
   onApprove: () => void;
+  onRetry: () => void;
   onClose: () => void;
   saving: boolean;
   closed: boolean;
@@ -171,7 +170,7 @@ function SpecifyWorkspace({
         <div>
           <div className="eyebrow">{closed ? "SPRINT SPECIFICATION CLOSED" : "SPECIFY"}</div>
           <h1>{closed ? "Sprint specification is now immutable." : "Build the specification through progressive review."}</h1>
-          <p>{closed ? "This approved specification is the baseline for implementation. It can no longer be edited." : "Each generated phase becomes editable as soon as it arrives. Edit it, then approve it to establish the current canonical version."}</p>
+          <p>{closed ? "This approved specification is the baseline for implementation. It can no longer be edited." : "Each phase is generated only after the previous phase is approved. Edit the current phase, then approve it to generate the next phase."}</p>
         </div>
         {!closed && <button type="button" className="spec-close-button" onClick={onClose} disabled={!allApproved || saving}>{saving ? "Saving..." : "Close Sprint Specification"}</button>}
       </section>
@@ -185,15 +184,15 @@ function SpecifyWorkspace({
             <div className="spec-panel-heading">Editable specification</div>
             <textarea value={content} onChange={(event) => setDraft(active.id, event.target.value)} disabled={closed || saving} aria-label={`${active.label} editable specification`} />
             <div className="spec-actions">
-              <span>{specApproved.includes(active.id) ? "Approved — approve again after further edits to overwrite the canonical file." : "Not yet approved."}</span>
-              {!closed && <button type="button" onClick={onApprove} disabled={saving}>{saving ? "Saving..." : specApproved.includes(active.id) ? "Approve Changes" : "Approve"}</button>}
+              <span>{specApproved.includes(active.id) ? "Approved. The next phase can be generated from this version." : "Not yet approved."}</span>
+              {!closed && <button type="button" onClick={onApprove} disabled={saving}>{saving ? "Saving..." : specApproved.includes(active.id) ? "Approve Changes & Continue" : "Approve & Generate Next"}</button>}
             </div>
           </div>
           <article className="evidence-card markdown-content spec-preview">
             <div className="spec-panel-heading">Preview</div>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </article>
-        </div> : <div className="progress-screen"><div className="spinner"/><div><div className="eyebrow">WAITING FOR SPECIFICATION OUTPUT</div><h1>{loading ? "The next phase is being prepared." : "No specification output is available yet."}</h1><p>The workflow runs sequentially so each phase can use the preceding phase as context.</p></div></div>}
+        </div> : <div className="progress-screen"><div className="spinner"/><div><div className="eyebrow">WAITING FOR SPECIFICATION OUTPUT</div><h1>{loading ? "The next phase is being prepared." : "No specification output is available yet."}</h1><p>{loading ? "The current phase is being generated. If generation failed, retry this phase without restarting the specification." : "This phase has not been generated yet."}</p>{!closed && !loading && <button type="button" onClick={onRetry} disabled={saving}>Retry Phase</button>}</div></div>}
       </section>
     </main>
   </div>;
@@ -372,9 +371,9 @@ export default function Home() {
   setProvenance(null);
 }
 
-  async function analyze(event: FormEvent) {
+  async function analyze(event: FormEvent, continuationPhase?: string) {
     event.preventDefault();
-    const phasesToRun = objective === "specify" ? specificationPhases.map((phase) => phase.id) : selectedPhases.filter((phase) => !completedPhases.includes(phase));
+    const phasesToRun = objective === "specify" ? [continuationPhase || specificationPhases[0].id] : selectedPhases.filter((phase) => !completedPhases.includes(phase));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
     if (!productName.trim()) { setError("Enter a Product Name before starting."); return; }
     if (!projectFolder.trim()) { setError("Enter the Project Folder location before starting."); return; }
@@ -600,11 +599,24 @@ export default function Home() {
       setSpecResults((previous) => ({ ...previous, [specActivePhase]: contentToApprove }));
       setSpecDirty((previous) => ({ ...previous, [specActivePhase]: false }));
       setSpecApproved((previous) => previous.includes(specActivePhase) ? previous : [...previous, specActivePhase]);
+      const currentIndex = specificationPhases.findIndex((phase) => phase.id === specActivePhase);
+      const nextPhase = currentIndex >= 0 ? specificationPhases[currentIndex + 1]?.id : undefined;
+      if (nextPhase) {
+        await analyze({ preventDefault() {} } as FormEvent, nextPhase);
+      } else {
+        setAnalysisComplete(true);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to approve the specification.");
+      setError(err instanceof Error ? err.message : "Unable to continue the specification.");
     } finally {
       setSpecSaving(false);
     }
+  }
+
+  async function retrySpecificationPhase() {
+    if (!specActivePhase || specClosed || loading) return;
+    setError("");
+    await analyze({ preventDefault() {} } as FormEvent, specActivePhase);
   }
 
   async function closeSpecification() {
@@ -697,7 +709,7 @@ export default function Home() {
       {objective !== "specify" && (        <fieldset className="phase-selection"><legend>Select SDLC phases</legend><div className="phase-selection-grid">{phases.map((phase) => <label key={phase.id} className="phase-option"><input type="checkbox" checked={selectedPhases.includes(phase.id)} onChange={() => setSelectedPhases((previous) => previous.includes(phase.id) ? previous.filter((id) => id !== phase.id) : [...previous, phase.id])} disabled={loading} /><span>{phase.label}</span></label>)}</div></fieldset>
       )}
       {error && <div className="error-banner" role="alert">{error}</div>}<div className="landing-note">Analysis is performed by the backend coding-agent pipeline.</div>
-    </div></main> : objective === "specify" ? <SpecifyWorkspace repoUrl={repoUrl} loading={loading} stopping={stopping} analysisComplete={analysisComplete} error={error} specPhases={specificationPhases} specResults={specResults} specDrafts={specDrafts} specApproved={specApproved} specDirty={specDirty} activePhase={specActivePhase} setActivePhase={setSpecActivePhase} setDraft={(phase, value) => { setSpecDrafts((previous) => ({ ...previous, [phase]: value })); setSpecDirty((previous) => ({ ...previous, [phase]: true })); }} onApprove={approveSpecificationPhase} onClose={closeSpecification} saving={specSaving} closed={specClosed} onStop={stopAnalysis} runId={runId} /> : <div className="workspace">
+    </div></main> : objective === "specify" ? <SpecifyWorkspace repoUrl={repoUrl} loading={loading} stopping={stopping} analysisComplete={analysisComplete} error={error} specPhases={specificationPhases} specResults={specResults} specDrafts={specDrafts} specApproved={specApproved} specDirty={specDirty} activePhase={specActivePhase} setActivePhase={setSpecActivePhase} setDraft={(phase, value) => { setSpecDrafts((previous) => ({ ...previous, [phase]: value })); setSpecDirty((previous) => ({ ...previous, [phase]: true })); }} onApprove={approveSpecificationPhase} onRetry={retrySpecificationPhase} onClose={closeSpecification} saving={specSaving} closed={specClosed} onStop={stopAnalysis} runId={runId} /> : <div className="workspace">
       <aside className="sidebar"><div className="sidebar-heading">SDLC Dossier</div><div className="progress-label">{loading ? progressText : analysisComplete ? "Analysis complete" : stopped ? `${completedPhases.length} of ${denominator} phases completed before stop` : error ? "Analysis failed" : "Analysis"}</div><nav className="phase-nav" aria-label="SDLC phases"><button className={`phase-tab selection-tab ${selectionView === "setup" ? "active" : ""}`} onClick={() => { viewedCompletedPhaseRef.current = null; setSelectionView("setup"); }}><span className="phase-number">00</span><span className="phase-name">Select Phases</span><span className="phase-status">•</span></button>{phases.map((phase, index) => { const complete = completedPhases.includes(phase.id); return <button key={phase.id} className={`phase-tab ${activePhase === phase.id ? "active" : ""} ${!complete ? "locked" : ""}`} onClick={() => { if (complete) { viewedCompletedPhaseRef.current = phase.id; setSelectionView(null); setActivePhase(phase.id); } }} disabled={!complete}><span className="phase-number">{String(index + 1).padStart(2, "0")}</span><span className="phase-name">{phase.label}</span><span className={`phase-status ${complete ? "done" : ""}`}>{complete ? "✓" : "•"}</span></button>; })}</nav><ReviewCodeBaseControl repoUrl={repoUrl} provider={provider} model={model} apiKey={apiKey} runId={runId} completedPhases={completedPhases} />{runId && !isDemo && completedPhases.length > 0 && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="sdlc-documentation.zip">Download completed work</a>}<button className="new-analysis" onClick={resetAnalysis} disabled={loading || stopping}>+ New repository</button></aside>
       <main className="content">
         {selectionView === "setup" ? <section className="selection-panel"><div className="eyebrow">ANALYSIS SETUP</div><h1>Continue analysis</h1><p className="section-intro">Select additional SDLC phases to run in this repository workspace. Completed phases remain readable here and are not rerunnable in V1. To rerun a completed phase, open a new browser tab/workspace.</p><fieldset className="phase-selection"><legend>Run phases</legend><div className="phase-selection-grid">{phases.map((phase) => { const complete = completedPhases.includes(phase.id); return <label key={phase.id} className="phase-option"><input type="checkbox" checked={!complete && selectedPhases.includes(phase.id)} onChange={() => setSelectedPhases((previous) => previous.includes(phase.id) ? previous.filter((id) => id !== phase.id) : [...previous, phase.id])} disabled={loading || stopping || complete} /><span>{phase.label}{complete ? " (completed)" : ""}</span></label>; })}</div></fieldset><form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="https://github.com/owner/repository" type="url" required aria-label="GitHub repository URL" disabled={true} readOnly /><button type="submit" disabled={loading || stopping}>{loading ? "Running..." : "Run selected phases"}</button></form>{error && <div className="error-banner" role="alert">{error}</div>}</section>
