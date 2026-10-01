@@ -93,6 +93,14 @@ def analyze_specification(
             phases_to_run = matching
 
         prior_contents = sprint_state.get("contents", {}) if existing_project_id and existing_sprint_id else {}
+        if phase_key:
+            phase_keys = [item[0] for item in SPECIFICATION_PHASES]
+            phase_index = phase_keys.index(phase_key)
+            approved = set(sprint_state.get("approved_phases", []))
+            if phase_index > 0 and phase_keys[phase_index - 1] not in approved:
+                raise ValueError(f"Approve '{phase_keys[phase_index - 1]}' before generating '{phase_key}'.")
+            if phase_key in approved:
+                raise ValueError(f"Specification phase '{phase_key}' is already approved.")
         previous_parts = []
         for prior_key, _ in SPECIFICATION_PHASES:
             if prior_key == phase_key:
