@@ -64,9 +64,8 @@ def analyze_specification(
         sprint_state = store.get_latest_sprint(project_id)
         if sprint_state is None:
             raise ValueError("No existing sprint was found for this product. Select New Sprint.")
-        if sprint_state.get("status") != "active":
-            raise ValueError("The latest sprint is already closed. Select New Sprint.")
         sprint_id = sprint_state["sprint_id"]
+        sprint_state = store.reset_active_sprint(project_id, sprint_id, intent, repo_url, product_name=product_name)
     elif sprint_mode == "new":
         sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
         project_id = sprint_state["project_id"]
