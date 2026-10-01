@@ -194,7 +194,7 @@ function SpecifyWorkspace({
             <div className="spec-panel-heading">Preview</div>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </article>
-        </div> : <div className="progress-screen"><div className="spinner"/><div><div className="eyebrow">WAITING FOR SPECIFICATION OUTPUT</div><h1>{loading ? "The next phase is being prepared." : "No specification output is available yet."}</h1><p>{loading ? "The current phase is being generated. If generation failed, retry this phase without restarting the specification." : "This phase has not been generated yet."}</p>{!closed && !loading && <button type="button" onClick={onRetry} disabled={saving}>Retry Phase</button>}</div></div>}
+        </div> : <div className="progress-screen"><div className="spinner"/><div><div className="eyebrow">WAITING FOR SPECIFICATION OUTPUT</div><h1>{loading ? "The next phase is being prepared." : "No specification output is available yet."}</h1><p>{loading ? "The current phase is being generated. If generation failed, retry this phase without restarting the specification." : "This phase has not been generated yet."}</p>{!closed && !loading && !error && <button type="button" onClick={onRetry} disabled={saving}>Retry Phase</button>}</div></div>}
       </section>
     </main>
   </div>;
@@ -261,7 +261,17 @@ export default function Home() {
         if (cancelled) return;
         applyStatus(status);
       } catch (err) {
-        if (!cancelled) { window.sessionStorage.removeItem(STORAGE_KEY); setError(err instanceof Error ? err.message : "Unable to restore the previous analysis."); }
+        if (!cancelled) {
+          window.sessionStorage.removeItem(STORAGE_KEY);
+          setAnalysisStarted(false);
+          setRunId(null);
+          setLoading(false);
+          setStopping(false);
+          setStopped(false);
+          setAnalysisComplete(false);
+          setSpecClosed(false);
+          setError(err instanceof Error ? err.message : "Unable to restore the previous analysis.");
+        }
       } finally { if (!cancelled) setRestored(true); }
     }
     restoreWorkspace();
@@ -292,7 +302,7 @@ export default function Home() {
   }, [objective, specProjectId, specSprintId, analysisStarted, projectFolder, productName]);
 
   useEffect(() => {
-    if (!analysisStarted || isDemo || !runId || !restored || analysisComplete || stopped) return;
+    if (!analysisStarted || isDemo || !runId || !restored || analysisComplete || stopped || error || (objective === "specify" && specClosed)) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -336,7 +346,7 @@ export default function Home() {
     });
     if (status.status === "completed") { setAnalysisComplete(true); setLoading(false); setStopping(false); setStopped(false); }
     else if (status.status === "cancelled") { setAnalysisComplete(false); setLoading(false); setStopping(false); setStopped(true); }
-    else if (status.status === "failed") { setAnalysisComplete(false); setLoading(false); setStopping(false); setError("The analysis could not continue."); }
+    else if (status.status === "failed") { setAnalysisComplete(false); setLoading(false); setStopping(false); setStopped(false); setError(status.failures?.[0]?.error || "The analysis could not continue."); }
     else { setAnalysisComplete(false); setLoading(true); if (status.status === "cancelling") setStopping(true); }
   }
 
