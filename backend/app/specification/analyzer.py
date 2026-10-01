@@ -41,6 +41,7 @@ def analyze_specification(
     phase_key: str | None = None,
     existing_project_id: str | None = None,
     existing_sprint_id: str | None = None,
+    sprint_mode: str = "new",
 ) -> dict:
     """Turn technical intent into a human-editable, implementation-ready specification."""
     if not intent or not intent.strip():
@@ -58,13 +59,22 @@ def analyze_specification(
             raise ValueError("This sprint specification is closed and immutable.")
         project_id = existing_project_id
         sprint_id = existing_sprint_id
-        stored_intent = sprint_state.get("contents", {}).get("intent", "")
-        if stored_intent:
-            intent = stored_intent.strip()
-    else:
+    elif sprint_mode == "existing":
+        project_id = store.project_id(repo_url, intent, product_name)
+        sprint_state = store.get_latest_sprint(project_id)
+        if sprint_state is None:
+            raise ValueError("No existing sprint was found for this product. Select New Sprint.")
+        if sprint_state.get("status") != "active":
+            raise ValueError("The latest sprint is already closed. Select New Sprint.")
+        sprint_id = sprint_state["sprint_id"]
+    elif sprint_mode == "new":
         sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
         project_id = sprint_state["project_id"]
         sprint_id = sprint_state["sprint_id"]
+    else:
+        raise ValueError("sprint_mode must be 'existing' or 'new'")
+    (store._sprint_dir(project_id, sprint_id) / "intent.md").write_text(intent.strip() + "\n", encoding="utf-8")
+    sprint_state = store.get_sprint(project_id, sprint_id, include_content=True)
     (output_run_dir / "specification-context.json").write_text(
         __import__("json").dumps({"project_id": project_id, "sprint_id": sprint_id}, indent=2),
         encoding="utf-8",
@@ -94,7 +104,7 @@ def analyze_specification(
                 raise ValueError(f"Unknown specification phase: {phase_key}")
             phases_to_run = matching
 
-        prior_contents = sprint_state.get("contents", {}) if existing_project_id and existing_sprint_id else {}
+        prior_contents = sprint_state.get("contents", {})
         if phase_key:
             phase_keys = [item[0] for item in SPECIFICATION_PHASES]
             phase_index = phase_keys.index(phase_key)
