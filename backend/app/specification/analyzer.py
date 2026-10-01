@@ -17,7 +17,9 @@ from ..specification_store import SpecificationStore
 
 
 SPECIFICATION_PHASES = [
+    ("scope", "Scope"),
     ("business-requirements", "Business Requirements"),
+    ("software-requirements", "Software Requirements"),
     ("technology", "Technology Architecture"),
     ("design", "Design"),
     ("tasks", "Implementation Tasks"),
@@ -162,7 +164,9 @@ def analyze_specification(
             "project_id": project_id,
             "sprint_id": sprint_id,
             "intent": intent.strip(),
+            "scope": outputs.get("scope", ""),
             "business_requirements": outputs.get("business-requirements", ""),
+            "software_requirements": outputs.get("software-requirements", ""),
             "technology": outputs.get("technology", ""),
             "design": outputs.get("design", ""),
             "tasks": outputs.get("tasks", ""),
