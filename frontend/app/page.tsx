@@ -214,7 +214,7 @@ export default function Home() {
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState("business-purpose");
-  const [specActivePhase, setSpecActivePhase] = useState("scope");
+  const [specActivePhase, setSpecActivePhase] = useState("business-requirements");
   const [specResults, setSpecResults] = useState<Record<string, string>>({});
   const [specDrafts, setSpecDrafts] = useState<Record<string, string>>({});
   const [specApproved, setSpecApproved] = useState<string[]>([]);
