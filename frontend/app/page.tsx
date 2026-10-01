@@ -602,9 +602,9 @@ export default function Home() {
       setSpecApproved((previous) => previous.includes(specActivePhase) ? previous : [...previous, specActivePhase]);
       const currentIndex = specificationPhases.findIndex((phase) => phase.id === specActivePhase);
       const nextPhase = currentIndex >= 0 ? specificationPhases[currentIndex + 1]?.id : undefined;
-      if (nextPhase) {
+      if (nextPhase && !specResults[nextPhase]) {
         await analyze({ preventDefault() {} } as FormEvent, nextPhase);
-      } else {
+      } else if (!nextPhase) {
         setAnalysisComplete(true);
       }
     } catch (err) {
