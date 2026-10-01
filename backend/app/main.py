@@ -366,7 +366,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
                     event_queue.put({"type": "analysis_cancelled", "repo_url": repo_url, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
             else:
                 control.finish("completed")
-                event_queue.put({"type": "analysis_completed", "repo_url": repo_url, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                event_queue.put({"type": "analysis_completed", "repo_url": repo_url, "run_id": results["run_id"], "completed_phases": list(control.snapshot().get("completed_phases", [])), "failed_phases": results.get("failures", [])})
         except RunCancelled:
             if memory_guard.triggered.is_set():
                 control.finish("failed", MemoryCapacityError.user_message)
