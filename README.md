@@ -12,7 +12,7 @@ A running analysis is independent of the browser tab. The workspace stores the `
 
 The workspace includes a **Stop analysis** control. It cancels the selected analysis run only; it does not stop the FastAPI web server or other users' work. Stop requests prevent subsequent phases from starting and propagate cancellation into active phase-agent and renderer requests. Completed phase results remain available and the user can return to the main page. If a browser is closed after a stop request, the backend still finishes cancellation independently.
 
-The progressive-results state remains the primary UI: completed phases stay readable while remaining phases continue, including the `10 of 11 phases have completed` case. Refresh recovery and stopping are additive to that experience.
+The Specify workflow is human-gated: one specification phase is generated at a time, the user can edit and approve it, and only then is the next phase generated. A failed phase can be retried without restarting the specification.
 
 ## Output retention and runtime mode
 
@@ -27,7 +27,7 @@ Set `RUNTIME_MODE=production` in the backend environment when production retenti
 
 The analysis endpoint is an event stream. Backend validation and execution errors are returned as an `analysis_failed` event so the frontend can display a useful message instead of waiting indefinitely. Renderer requests retry HTTP 429 responses with bounded backoff before reporting failure.
 
-This is a V1 demo/evaluation application and not every edge case has been exhaustively tested. If a phase run encounters an unexpected failure or repository-access error, do not treat the existing completed work as lost: return to the main setup page and rerun the affected phase, or start a new browser tab/workspace. Completed phase artifacts should remain available in the workspace and can be downloaded while later phases are still running.
+This is a V1 demo/evaluation application and not every edge case has been exhaustively tested. If a phase run encounters an unexpected failure or repository-access error, completed specification phases remain available. The current failed phase can be retried without regenerating earlier approved phases.
 
 When a run fails after some phases have completed, completed phase results remain available in the current workspace. Select a completed phase to inspect it, or use the setup screen to explicitly select a phase again and rerun it. A rerun replaces that phase's `agent-output.md` and `raw.md` artifacts for the same `work_id`.
 
@@ -53,7 +53,7 @@ This information is intended to support engineering diagnostics and performance 
 
 Start the backend from `backend/` with the project's normal Python environment and start the frontend from `frontend/` with the package manager used by the repository. The frontend currently expects the backend at `http://localhost:8000`.
 
-Before using the application, provide a provider, model, API key, GitHub repository URL, and one or more SDLC phases. For repeat runs, keep the returned `run_id` and explicitly select phases to rerun within that workspace.
+Before using the Specify workflow, provide a product name, project folder containing the product and `project.md`, provider, model, API key, and a development Intent. A repository URL is optional for Specify and is used as technical evidence when supplied.
 
 ## Run locally
 
@@ -70,8 +70,8 @@ You also need an API key for the AI provider used by the application. The easies
 After cloning:
 
 ```bat
-git clone https://github.com/nmuru/SDLC-Dossier.git
-cd SDLC-Dossier
+git clone https://github.com/nmuru/sdlc-for-agile.git
+cd sdlc-for-agile
 start.bat
 ```
 
