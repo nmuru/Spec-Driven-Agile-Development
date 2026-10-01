@@ -115,6 +115,30 @@ class SpecificationStore:
                 numbers.append(int(match.group(1)))
         return sorted(numbers)
 
+    def latest_sprint_id(self, project_id: str) -> str | None:
+        numbers = self._sprint_numbers(project_id)
+        if not numbers:
+            return None
+        latest_number = numbers[-1]
+        candidates = [
+            path for path in self.root.iterdir()
+            if path.is_dir()
+            and re.fullmatch(r"sprint-(\\d+)", path.name)
+            and int(re.fullmatch(r"sprint-(\\d+)", path.name).group(1)) == latest_number
+        ]
+        if not candidates:
+            return None
+        return candidates[0].name
+
+    def get_latest_sprint(self, project_id: str) -> dict | None:
+        sprint_id = self.latest_sprint_id(project_id)
+        if not sprint_id:
+            return None
+        try:
+            return self._read_state(project_id, sprint_id)
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return None
+
     def get_or_create_active_sprint(
         self,
         repo_url: str | None,
@@ -124,7 +148,7 @@ class SpecificationStore:
         project_id = self.project_id(repo_url, intent, product_name)
         with _store_lock:
             next_number = (self._sprint_numbers(project_id) or [0])[-1] + 1
-            sprint_id = f"sprint-{next_number:03d}"
+            sprint_id = f"sprint-{next_number}"
             sprint_dir = self._sprint_dir(project_id, sprint_id)
             sprint_dir.mkdir(parents=True, exist_ok=False)
             state = {
@@ -184,10 +208,13 @@ class SpecificationStore:
 
     def list_sprints(self, project_id: str) -> list[dict]:
         result: list[dict] = []
-        for number in self._sprint_numbers(project_id):
-            sprint_id = f"sprint-{number:03d}"
+        paths = [
+            path for path in self.root.iterdir()
+            if path.is_dir() and re.fullmatch(r"sprint-(\\d+)", path.name)
+        ]
+        for path in sorted(paths, key=lambda item: int(re.fullmatch(r"sprint-(\\d+)", item.name).group(1))):
             try:
-                result.append(self._read_state(project_id, sprint_id))
+                result.append(self._read_state(project_id, path.name))
             except (OSError, json.JSONDecodeError):
                 continue
         return result
