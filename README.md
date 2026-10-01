@@ -1,103 +1,206 @@
-# Spec Driven Agile Development 
+# Spec-Driven Agile Development
 
-<>
+An AI-assisted workflow for turning development intent into concise, reviewable specifications that can guide coding agents during an Agile sprint.
 
-## Providers and model input
+This project explores a practical question: how can the speed of AI coding be combined with the discipline of software specification without recreating the long feedback cycles of traditional waterfall development?
 
-V1 intentionally exposes only the providers implemented by the backend: OpenRouter and OpenAI. The frontend should not advertise providers that the backend cannot route. The model field is passed through to the selected provider. There is no automatic model fallback in this V1 release. A rate limit, unavailable model, authentication failure, or provider error is surfaced as an analysis failure rather than silently switching to a different model.
+## What is Spec-Driven Agile Development?
 
-## Run control and refresh resilience
+Spec-Driven Development (SDD) makes the specification a primary working artifact for implementation.
 
-A running analysis is independent of the browser tab. The workspace stores the `work_id` and lightweight run metadata in browser local storage; API keys are not stored. On refresh, the frontend reconnects to the backend status endpoint for that `work_id`, recovers completed phase artifacts, and resumes the same progressive-results view rather than returning to the initial setup screen.
+Instead of asking an AI coding agent to move directly from an idea to code, the human first states the development intent. The application progressively elaborates that intent into a small set of implementation-oriented specifications. The human reviews, edits and approves each stage before the next stage is generated.
 
-The workspace includes a **Stop analysis** control. It cancels the selected analysis run only; it does not stop the FastAPI web server or other users' work. Stop requests prevent subsequent phases from starting and propagate cancellation into active phase-agent and renderer requests. Completed phase results remain available and the user can return to the main page. If a browser is closed after a stop request, the backend still finishes cancellation independently.
+The resulting specification is not intended to be a large piece of permanent documentation. It is a concise working contract between the development team and the coding agent.
 
-The Specify workflow is human-gated: one specification phase is generated at a time, the user can edit and approve it, and only then is the next phase generated. A failed phase can be retried without restarting the specification.
+The basic loop is:
 
-## Output retention and runtime mode
+**Human Intent → Scope → Requirements → Technology → Design → Implementation Tasks → Coding Agent**
 
-Run diagnostics and generated phase artifacts are written under `output-content/{work_id}`. The generic `runtime_mode` setting controls their lifecycle and defaults to `evaluation` so V1 evaluation data is retained.
+The human remains responsible for intent, decisions and approval; AI does the bulk of the specification elaboration and can subsequently use the approved specification to implement the work.
 
-- `evaluation` — retain per-run output for diagnostics, evaluation, and troubleshooting.
-- `production` — allow an explicit UI close/cleanup request to remove that run's output. If the run is still active, the backend cancels it first and removes the folder after cancellation completes.
+## Why connect SDD with Agile?
 
-Set `RUNTIME_MODE=production` in the backend environment when production retention behavior is desired. Browser refresh does not trigger cleanup; cleanup is scoped to the specific `work_id`. The browser does not provide a reliable signal that distinguishes closing a tab/window from refreshing it, so cleanup should be initiated by an explicit UI close action rather than by `pagehide`/`beforeunload` alone.
+SDD does not replace Agile or Scrum. They address different levels of the development process.
 
-## Rate limits and failures
+The Product Backlog carries product intent, priorities and context. The Sprint Backlog selects the work to be undertaken. Detailed specification belongs closer to execution, when the team is actually ready to build something.
 
-The analysis endpoint is an event stream. Backend validation and execution errors are returned as an `analysis_failed` event so the frontend can display a useful message instead of waiting indefinitely. Renderer requests retry HTTP 429 responses with bounded backoff before reporting failure.
+This application therefore treats a sprint Intent as the starting point for specification. A developer, pair, small group, or swarm can take the selected work and progressively clarify it with AI before implementation begins.
 
-This is a V1 demo/evaluation application and not every edge case has been exhaustively tested. If a phase run encounters an unexpected failure or repository-access error, completed specification phases remain available. The current failed phase can be retried without regenerating earlier approved phases.
+This separation also avoids duplicating capabilities already provided by Agile project-management tools such as Jira. Those tools can remain responsible for backlog, sprint and delivery management, while this application focuses on the technical elaboration required immediately before coding.
 
-When a run fails after some phases have completed, completed phase results remain available in the current workspace. Select a completed phase to inspect it, or use the setup screen to explicitly select a phase again and rerun it. A rerun replaces that phase's `agent-output.md` and `raw.md` artifacts for the same `work_id`.
+## The Specify workflow
 
-## Mermaid diagrams
+The Specify option is a human-gated, progressive workflow:
 
-Phase documents may contain fenced `mermaid` code blocks. The frontend renders these diagrams client-side with Mermaid. When Mermaid cannot parse a diagram, the UI shows the source instead of leaving the result blank. This is intended to make diagram failures diagnosable while preserving the underlying documentation.
+1. **Intent** — The technical team describes the development goal, desired outcome, boundaries, constraints and known technology decisions.
+2. **Scope** — Establish what belongs in the current sprint and what is explicitly outside it.
+3. **Business Requirements** — Develop a concise working interpretation of the business need from the Intent, product context and available evidence.
+4. **Software Requirements** — Translate the approved scope and requirements into implementation-oriented software behaviour.
+5. **Technology Architecture** — Identify how the requested change fits the existing product technology and architecture.
+6. **Design** — Establish the relevant implementation design within the existing system.
+7. **Implementation Tasks** — Break the approved design into concrete, AI-sized tasks suitable for the current sprint.
 
-## Demo
+Each phase is generated only after the previous phase is approved. The user can edit the generated content before approval. A failed phase can be retried without discarding previously approved phases.
 
-The Vercel Commerce example is pre-generated and stored under `frontend/public/vercel-demo/`. It is documentation only and does not consume API credits when viewed. Real analyses use the backend pipeline and the API credentials supplied with the request.
+The specification is stored as sprint-level Markdown artifacts under:
 
-## Security and workspace model
+`<Project Folder>/<Product Name>/spec_output/sprint-N/`
 
-GitHub repositories are cloned into a temporary read-only analysis workspace for a run and are removed when that run finishes. Phase agents receive repository tools that restrict paths to the cloned repository and expose file listing, file reads, and text search without write operations. API keys are supplied per request and are not persisted by the frontend.
+The product folder must already exist and contain a human-maintained `project.md`, which provides product-level context.
 
-## Diagnostics
+## Sprint model
 
-Resource diagnostics are enabled in the current diagnostics baseline. The backend records runtime samples and phase lifecycle events as JSONL under the run's output directory. Agent diagnostics also record phase trace identifiers, model/provider names, observed agent turns, tool-call counts, and timing information in backend logs. Renderer diagnostics now record renderer start, completion, retry, failure, cancellation, attempt number, model, phase, and elapsed seconds without logging prompts or generated content.
+A Specify run represents one development sprint specification.
 
-This information is intended to support engineering diagnostics and performance investigation. It is not presented as a claim that the application can reconstruct every provider-side billing or execution metric.
+New Sprint creates the next numbered sprint folder:
+
+- `sprint-1`
+- `sprint-2`
+- `sprint-3`
+- ...
+
+Existing Sprint can reuse the latest active sprint when a specification needs to be restarted or revised. A closed sprint specification is treated as the implementation baseline and is no longer editable.
+
+The workflow is intentionally sprint-bounded. If the Intent represents work that is too large for the current sprint, the specification should expose that scope rather than silently turning it into a multi-week implementation.
+
+## Repository context
+
+A GitHub repository URL is optional for Specify.
+
+When supplied, the existing repository provides technical evidence for the specification. The agents can inspect the codebase and distinguish existing implementation from proposed changes. Explicit human Intent remains the primary input; repository evidence should not silently override it.
+
+This makes the workflow useful both for new development and for enhancing an existing application.
+
+## Specify and Document are complementary
+
+The application also retains its original **Document** capability.
+
+The two workflows serve different purposes:
+
+- **Specify** creates concise, sprint-level, coding-agent-ready specifications for work about to be implemented.
+- **Document** reverse engineers a repository into a broader SDLC dossier covering areas such as business purpose, scope, requirements, architecture, design, implementation, testing strategy and future directions.
+
+This makes the same product useful throughout the development lifecycle. Once a project has a GitHub repository, the repository can provide technical context for Specify and can also be analysed through Document to create or refresh the wider SDLC dossier.
+
+## Human in the loop
+
+The application deliberately does not give the specification agent unrestricted authority over the project files.
+
+Specification agents are read-only during generation. They return the proposed specification to the application; the application persists the approved artifact.
+
+This keeps an explicit boundary between:
+
+- human-authored Intent,
+- AI-generated interpretation,
+- human approval,
+- and subsequent implementation by a coding agent.
+
+The goal is not to eliminate human engineering judgment, but to move that judgment to the points where it has the greatest leverage.
+
+## AI providers
+
+The current version supports the providers routed by the backend:
+
+- OpenRouter
+- OpenAI
+
+The selected model is supplied with the request. There is no silent model fallback: provider, authentication, rate-limit and model failures are surfaced to the user.
+
+API keys are entered for the analysis request and are not stored by the frontend.
 
 ## Local development
 
-Start the backend from `backend/` with the project's normal Python environment and start the frontend from `frontend/` with the package manager used by the repository. The frontend currently expects the backend at `http://localhost:8000`.
-
-Before using the Specify workflow, provide a product name, project folder containing the product and `project.md`, provider, model, API key, and a development Intent. A repository URL is optional for Specify and is used as technical evidence when supplied.
-
-## Run locally
-
-You can simulate the application on your Windows desktop by cloning this repository and running `start.bat`. The script creates the Python virtual environment and installs the backend dependencies from `backend/requirements.txt`, installs the frontend npm dependencies, and starts the FastAPI backend and Next.js frontend.
-
-Before running `start.bat`, make sure the following are installed:
-
-- **Git**
-- **Python 3.11+** with `python` available on PATH
-- **Node.js 20.9+** with `npm` available on PATH
-
-You also need an API key for the AI provider used by the application. The easiest way to try the UI is to use a public GitHub repository as the analysis input. Live analysis requires a provider, model, and API key entered in the application.
-
-After cloning:
+Clone the repository:
 
 ```bat
-git clone https://github.com/nmuru/sdlc-for-agile.git
-cd sdlc-for-agile
-start.bat
+git clone https://github.com/nmuru/Spec-Driven-Agile-Development.git
+cd Spec-Driven-Agile-Development
 ```
 
-The frontend runs on the local Next.js development server, normally at **http://localhost:3000**. The backend runs on **http://localhost:8000**.
+Requirements:
 
-**Windows note:** the current `start.bat` contains machine-specific paths from the author's development environment. If those paths do not match your machine, use the commands below instead of `start.bat`:
+- Git
+- Python 3.11+
+- Node.js 20.9+
+- An API key for the selected AI provider
+
+On Windows, the repository includes `start.bat` for running the application. If its environment-specific paths do not match your machine, run the services manually.
+
+Backend:
 
 ```bat
 cd backend
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-cd ..\frontend
-npm install
+.venv\\Scripts\\python.exe -m pip install -r requirements.txt
+.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload
 ```
 
-Then start the backend in one terminal:
-
-```bat
-cd backend
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-and the frontend in another:
+Frontend, in a second terminal:
 
 ```bat
 cd frontend
+npm install
 npm run dev
 ```
 
+The frontend normally runs at `http://localhost:3000` and the backend at `http://localhost:8000`.
+
+## Using Specify locally
+
+Before starting a Specify run, provide:
+
+- **Product Name** — the product directory name.
+- **Project Folder** — the parent folder containing the product directory.
+- **project.md** — a human-maintained product context file inside the product directory.
+- **Intent** — the work you want to specify for the sprint.
+- **Provider, model and API key**.
+- **GitHub repository URL**, when an existing repository should provide technical evidence.
+
+For a new sprint, select **New Sprint**. To restart the latest active sprint, select **Existing Sprint**.
+
+After the phases are approved, use **Close Sprint Specification** to establish the specification as the sprint's implementation baseline.
+
+## Example
+
+For example, an ecommerce product might begin a sprint with an Intent such as:
+
+> Build the first usable storefront experience where a customer can discover products, browse the catalog, search and filter products, view product details and understand available product options.
+
+The application can then progressively turn that Intent into scope, requirements, architecture, design and implementation tasks rather than asking a coding agent to infer all of those decisions directly from a short prompt.
+
+## Project structure
+
+The important product-level structure is:
+
+```text
+<Project Folder>/
+  <Product Name>/
+    project.md
+    spec_output/
+      sprint-1/
+        sprint-state.json
+        intent.md
+        scope.md
+        business-requirements.md
+        software-requirements.md
+        technology.md
+        design.md
+        tasks.md
+      sprint-2/
+        ...
+      repository/
+        document/
+          ... Document-mode SDLC outputs ...
+```
+
+The sprint specification artifacts are intended to remain small, readable and directly useful to implementation.
+
+## Current status
+
+This repository is a working exploration of Spec-Driven Agile Development rather than a claim of a finished methodology or production-hardened platform.
+
+The core workflow is intentionally frozen at a usable V1 milestone. Further edge-case testing, integrations and workflow refinements can be added in subsequent iterations.
+
+## License
+
+See the repository for the applicable license and project files.
