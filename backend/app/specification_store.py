@@ -123,8 +123,8 @@ class SpecificationStore:
         candidates = [
             path for path in self.root.iterdir()
             if path.is_dir()
-            and re.fullmatch(r"sprint-(\\d+)", path.name)
-            and int(re.fullmatch(r"sprint-(\\d+)", path.name).group(1)) == latest_number
+            and re.fullmatch(r"sprint-(\d+)", path.name)
+            and int(re.fullmatch(r"sprint-(\d+)", path.name).group(1)) == latest_number
         ]
         if not candidates:
             return None
@@ -234,9 +234,9 @@ class SpecificationStore:
         result: list[dict] = []
         paths = [
             path for path in self.root.iterdir()
-            if path.is_dir() and re.fullmatch(r"sprint-(\\d+)", path.name)
+            if path.is_dir() and re.fullmatch(r"sprint-(\d+)", path.name)
         ]
-        for path in sorted(paths, key=lambda item: int(re.fullmatch(r"sprint-(\\d+)", item.name).group(1))):
+        for path in sorted(paths, key=lambda item: int(re.fullmatch(r"sprint-(\d+)", item.name).group(1))):
             try:
                 result.append(self._read_state(project_id, path.name))
             except (OSError, json.JSONDecodeError):
