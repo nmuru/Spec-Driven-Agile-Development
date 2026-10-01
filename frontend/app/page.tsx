@@ -51,7 +51,9 @@ type RunStatus = { run_id: string; status: string; repo_url: string; selected_ph
 type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "specify" | "document" | "understand"; intent: string; productName?: string; projectFolder?: string };
 
 const specificationPhases: SpecPhase[] = [
+  { id: "scope", label: "Scope" },
   { id: "business-requirements", label: "Business Requirements" },
+  { id: "software-requirements", label: "Software Requirements" },
   { id: "technology", label: "Technology Architecture" },
   { id: "design", label: "Design" },
   { id: "tasks", label: "Implementation Tasks" },
@@ -645,7 +647,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setProductName(""); setProjectFolder(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("business-requirements"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecDirty({}); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setIntent(""); setProductName(""); setProjectFolder(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("specify"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(phases[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); setSpecActivePhase("scope"); setSpecResults({}); setSpecDrafts({}); setSpecApproved([]); setSpecDirty({}); setSpecProjectId(null); setSpecSprintId(null); setSpecClosed(false); setSpecSaving(false); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = phases.find((phase) => phase.id === activePhase) ?? phases[0];
