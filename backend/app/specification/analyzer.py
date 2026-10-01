@@ -17,13 +17,10 @@ from ..specification_store import SpecificationStore
 
 
 SPECIFICATION_PHASES = [
-    ("scope", "Scope"),
     ("business-requirements", "Business Requirements"),
-    ("software-requirements", "Software Requirements Specification"),
-    ("technology", "Technology Specification"),
+    ("technology", "Technology Architecture"),
     ("design", "Design"),
     ("tasks", "Implementation Tasks"),
-    ("review", "Specification Review"),
 ]
 
 
@@ -39,6 +36,9 @@ def analyze_specification(
     api_key: str,
     run_control: Optional[RunControl] = None,
     on_phase_complete=None,
+    phase_key: str | None = None,
+    existing_project_id: str | None = None,
+    existing_sprint_id: str | None = None,
 ) -> dict:
     """Turn technical intent into a human-editable, implementation-ready specification."""
     if not intent or not intent.strip():
@@ -50,9 +50,19 @@ def analyze_specification(
 
     # Durable sprint state is separate from the transient run workspace.
     store = SpecificationStore(project_folder=project_folder, product_name=product_name) if (project_folder and product_name) else SpecificationStore()
-    sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
-    project_id = sprint_state["project_id"]
-    sprint_id = sprint_state["sprint_id"]
+    if existing_project_id and existing_sprint_id:
+        sprint_state = store.get_sprint(existing_project_id, existing_sprint_id, include_content=True)
+        if sprint_state.get("status") != "active":
+            raise ValueError("This sprint specification is closed and immutable.")
+        project_id = existing_project_id
+        sprint_id = existing_sprint_id
+        stored_intent = sprint_state.get("contents", {}).get("intent", "")
+        if stored_intent:
+            intent = stored_intent.strip()
+    else:
+        sprint_state = store.get_or_create_active_sprint(repo_url, intent, product_name=product_name)
+        project_id = sprint_state["project_id"]
+        sprint_id = sprint_state["sprint_id"]
     (output_run_dir / "specification-context.json").write_text(
         __import__("json").dumps({"project_id": project_id, "sprint_id": sprint_id}, indent=2),
         encoding="utf-8",
@@ -75,9 +85,23 @@ def analyze_specification(
             )
 
         outputs: dict[str, str] = {}
-        previous = None
+        phases_to_run = SPECIFICATION_PHASES
+        if phase_key:
+            matching = [item for item in SPECIFICATION_PHASES if item[0] == phase_key]
+            if not matching:
+                raise ValueError(f"Unknown specification phase: {phase_key}")
+            phases_to_run = matching
 
-        for phase_key, phase_name in SPECIFICATION_PHASES:
+        prior_contents = sprint_state.get("contents", {}) if existing_project_id and existing_sprint_id else {}
+        previous_parts = []
+        for prior_key, _ in SPECIFICATION_PHASES:
+            if prior_key == phase_key:
+                break
+            if prior_key in prior_contents:
+                previous_parts.append(f"APPROVED {prior_key.upper()}\n\n{prior_contents[prior_key]}")
+        previous = "\n\n".join(previous_parts) or None
+
+        for phase_key, phase_name in phases_to_run:
             if run_control is not None:
                 run_control.phase_started(phase_key)
             result, actual_model = run_specification_agent(
@@ -130,12 +154,9 @@ def analyze_specification(
             "project_id": project_id,
             "sprint_id": sprint_id,
             "intent": intent.strip(),
-            "scope": outputs["scope"],
-            "business_requirements": outputs["business-requirements"],
-            "software_requirements": outputs["software-requirements"],
-            "design": outputs["design"],
-            "tasks": outputs["tasks"],
-            "technology": outputs["technology"],
-            "specification": outputs["review"],
-            "review": outputs["review"],
+            "business_requirements": outputs.get("business-requirements", ""),
+            "technology": outputs.get("technology", ""),
+            "design": outputs.get("design", ""),
+            "tasks": outputs.get("tasks", ""),
+            "specification": outputs.get("tasks", ""),
         }
