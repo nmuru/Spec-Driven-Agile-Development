@@ -778,7 +778,7 @@ def run_specification_agent(
 
     phase = f"specification/{agent}"
     phase_intelligence = (
-        "CURRENT SPRINT INTENT (Sprint Goal + Sprint Backlog)\n\n"
+        "CURRENT DEVELOPMENT INTENT\n\n"
         + intent.strip()
         + "\n\n"
         + repository_context
