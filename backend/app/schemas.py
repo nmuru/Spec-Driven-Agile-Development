@@ -13,6 +13,7 @@ class AnalyzeRequest(BaseModel):
     intent: str | None = None
     product_name: str | None = None
     project_folder: str | None = None
+    sprint_mode: str = "new"
 
 
 class AnalyzeResponse(BaseModel):
