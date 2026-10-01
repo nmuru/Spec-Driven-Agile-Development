@@ -113,6 +113,10 @@ button {
   line-height: 1.7;
 }
 
+.landing-copy + .landing-copy {
+  margin-top: 1rem;
+}
+
 .repo-form {
   display: flex;
   gap: 10px;
